@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Three.js 测试</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div>Three.js 测试页面</div>
+        <div id="status">正在加载...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+
+        try {
+            // 检查 THREE 是否加载
+            if (typeof THREE === 'undefined') {
+                statusDiv.innerHTML = '❌ Three.js 未加载';
+                throw new Error('Three.js not loaded');
+            }
+            statusDiv.innerHTML = '✓ Three.js 已加载<br>';
+
+            // 创建场景
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            statusDiv.innerHTML += '✓ 场景已创建<br>';
+
+            // 创建相机
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+            statusDiv.innerHTML += '✓ 相机已创建<br>';
+
+            // 创建渲染器
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            statusDiv.innerHTML += '✓ 渲染器已创建<br>';
+
+            // 添加光源
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+            statusDiv.innerHTML += '✓ 光源已添加<br>';
+
+            // 添加网格
+            const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+            scene.add(gridHelper);
+            statusDiv.innerHTML += '✓ 网格已添加<br>';
+
+            // 添加坐标轴
+            const axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+            statusDiv.innerHTML += '✓ 坐标轴已添加<br>';
+
+            // 添加一个立方体
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 0.5, 0);
+            scene.add(cube);
+            statusDiv.innerHTML += '✓ 立方体已添加<br>';
+
+            // 添加轨道控制器
+            if (typeof THREE.OrbitControls !== 'undefined') {
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                statusDiv.innerHTML += '✓ 轨道控制器已添加<br>';
+            } else {
+                statusDiv.innerHTML += '⚠ OrbitControls 未加载<br>';
+            }
+
+            statusDiv.innerHTML += '<br>✅ 所有组件初始化成功！<br>应该能看到绿色立方体、网格和坐标轴';
+
+            // 动画循环
+            function animate() {
+                requestAnimationFrame(animate);
+                cube.rotation.x += 0.01;
+                cube.rotation.y += 0.01;
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            // 窗口大小调整
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+        } catch (error) {
+            statusDiv.innerHTML += '<br>❌ 错误: ' + error.message;
+            console.error('初始化错误:', error);
+        }
+    </script>
+</body>
+</html>

@@ -108,6 +108,29 @@
                     </div>
                 </div>
 
+                <!-- 曲面规划 -->
+                <div class="section">
+                    <h3>曲面规划</h3>
+                    <button id="convert-mesh-btn" class="btn btn-success">生成曲面网格</button>
+
+                    <div class="checkbox-group" style="margin-top: 10px;">
+                        <input type="checkbox" id="show-surface" checked />
+                        <label for="show-surface">显示曲面</label>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="show-trajectory" checked />
+                        <label for="show-trajectory">显示轨迹</label>
+                    </div>
+
+                    <div id="surface-status" class="info-box" style="display: none; margin-top: 10px;">
+                        <div class="param-row">
+                            <span>曲面状态:</span>
+                            <span id="surface-status-text">未生成</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 目标点选择 -->
                 <div class="section">
                     <h3>目标点选择</h3>
@@ -120,8 +143,16 @@
                             <span id="start-point-info">未设置</span>
                         </div>
                         <div class="param-row">
+                            <span>起始UV:</span>
+                            <span id="start-uv-info">-</span>
+                        </div>
+                        <div class="param-row">
                             <span>末端点:</span>
                             <span id="end-point-info">未设置</span>
+                        </div>
+                        <div class="param-row">
+                            <span>末端UV:</span>
+                            <span id="end-uv-info">-</span>
                         </div>
                     </div>
                 </div>
@@ -163,6 +194,7 @@
     <!-- 加载主脚本 -->
     <script src="js/pointcloud.js"></script>
     <script src="js/roi_selector.js"></script>
+    <script src="js/planner_visualizer.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>

@@ -4,18 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ROS 点云裁剪与目标下发工具</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=5">
 
     <!-- Three.js 库 (使用兼容版本) -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <!--<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>-->
 
     <!-- ROS 库 -->
-    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+    <!--<script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>-->
 
     <!-- EventEmitter3 用于事件处理 -->
-    <script src="https://cdn.jsdelivr.net/npm/eventemitter3@4.0.7/dist/eventemitter3.min.js"></script>
+    <!--<script src="https://cdn.jsdelivr.net/npm/eventemitter3@4.0.7/dist/eventemitter3.min.js"></script>-->
+    <script src="js/vendor/three.min.js"></script>
+    <script src="js/vendor/OrbitControls.js"></script>
+    <script src="js/vendor/TransformControls.js"></script>
+    <script src="js/vendor/roslib.min.js"></script>
+    <script src="js/vendor/eventemitter3.min.js"></script>
 </head>
 <body>
     <!-- 移动端菜单按钮 -->
@@ -52,12 +57,36 @@
                     </div>
                     <div class="input-group">
                         <label>无人机位姿 Topic:</label>
-                        <input type="text" id="pose-topic" value="/mavros/local_position/pose" />
+                        <input type="text" id="pose-topic" value="/mavros/local_position/web_pose" />
                     </div>
                     <div class="input-group">
                         <label>点云大小:</label>
                         <input type="range" id="point-size" min="0.01" max="1" value="0.05" step="0.01" />
                         <span id="point-size-value">0.05</span>
+                    </div>
+                    <div class="input-group">
+                        <label>点云密度:</label>
+                        <input
+                            type="range"
+                            id="cloud-density"
+                            min="50000"
+                            max="1500000"
+                            value="800000"
+                            step="50000"
+                        />
+                        <span id="cloud-density-value">800000</span>
+                    </div>
+                    <div class="input-group">
+                        <label>累计帧数:</label>
+                        <input
+                            type="range"
+                            id="accumulation-frames"
+                            min="1"
+                            max="50"
+                            value="20"
+                            step="1"
+                        />
+                        <span id="accumulation-frames-value">20</span>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="show-drone" checked />
@@ -71,7 +100,7 @@
                     <button id="create-roi-btn" class="btn btn-success">创建裁剪框</button>
                     <button id="delete-roi-btn" class="btn btn-danger" disabled>删除裁剪框</button>
 
-                    <div id="roi-info" class="info-box" style="display: none;">
+                    <!-- <div id="roi-info" class="info-box" style="display: none;">
                         <h4>裁剪框参数</h4>
                         <div class="param-row">
                             <span>中心:</span>
@@ -85,7 +114,7 @@
                             <span>旋转:</span>
                             <span id="roi-rotation">-</span>
                         </div>
-                    </div>
+                    </div> -->
 
                     <div class="input-group">
                         <label>变换模式:</label>
@@ -108,20 +137,75 @@
                     </div>
                 </div>
 
+                <!-- 曲面拟合 -->
+                <div class="section">
+                    <h3>曲面拟合</h3>
+                    <div class="info-box" style="margin-bottom: 10px;">
+                        <div class="param-row">
+                            <span>状态:</span>
+                            <span id="surface-status-text">未拟合</span>
+                        </div>
+                    </div>
+                    <button id="generate-surface-btn" class="btn btn-success" disabled>生产曲面</button>
+                    <button id="clear-surface-btn" class="btn btn-secondary" disabled>取消曲面</button>
+                </div>
+
                 <!-- 目标点选择 -->
                 <div class="section">
-                    <h3>目标点选择</h3>
-                    <button id="set-start-btn" class="btn btn-info">设置起始点</button>
-                    <button id="set-end-btn" class="btn btn-info">设置末端点</button>
+                    <h3>轨迹规划参数</h3>
 
-                    <div class="info-box">
-                        <div class="param-row">
-                            <span>起始点:</span>
-                            <span id="start-point-info">未设置</span>
+                    <!-- 起始点 UV 参数 -->
+                    <div class="subsection">
+                        <h4>起始点 UV 参数</h4>
+                        <div class="input-group">
+                            <label>起始 U (0-1):</label>
+                            <input type="range" id="start-u-slider" min="0" max="1" value="0.2" step="0.01" />
+                            <span id="start-u-value">0.20</span>
                         </div>
-                        <div class="param-row">
-                            <span>末端点:</span>
-                            <span id="end-point-info">未设置</span>
+                        <div class="input-group">
+                            <label>起始 V (0-1):</label>
+                            <input type="range" id="start-v-slider" min="0" max="1" value="0.2" step="0.01" />
+                            <span id="start-v-value">0.20</span>
+                        </div>
+                        <div class="info-box" style="margin-top: 5px;">
+                            <div class="param-row">
+                                <span>曲面点:</span>
+                                <span id="start-point-info">未设置</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 终点 UV 参数 -->
+                    <div class="subsection" style="margin-top: 15px;">
+                        <h4>终点 UV 参数</h4>
+                        <div class="input-group">
+                            <label>终点 U (0-1):</label>
+                            <input type="range" id="goal-u-slider" min="0" max="1" value="0.8" step="0.01" />
+                            <span id="goal-u-value">0.80</span>
+                        </div>
+                        <div class="input-group">
+                            <label>终点 V (0-1):</label>
+                            <input type="range" id="goal-v-slider" min="0" max="1" value="0.8" step="0.01" />
+                            <span id="goal-v-value">0.80</span>
+                        </div>
+                        <div class="info-box" style="margin-top: 5px;">
+                            <div class="param-row">
+                                <span>曲面点:</span>
+                                <span id="goal-point-info">未设置</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 规划参数 -->
+                    <div class="subsection" style="margin-top: 15px;">
+                        <h4>规划参数</h4>
+                        <div class="input-group">
+                            <label>采样数量:</label>
+                            <input type="number" id="num-samples" value="5000" min="1000" max="20000" step="1000" />
+                        </div>
+                        <div class="input-group">
+                            <label>超时时间(秒):</label>
+                            <input type="number" id="planning-timeout" value="20" min="5" max="60" step="5" />
                         </div>
                     </div>
                 </div>
@@ -129,7 +213,7 @@
                 <!-- 执行控制 -->
                 <div class="section">
                     <h3>执行控制</h3>
-                    <button id="execute-btn" class="btn btn-execute" disabled>确认执行</button>
+                    <button id="execute-planning-btn" class="btn btn-execute" disabled>执行轨迹规划</button>
                     <button id="reset-btn" class="btn btn-secondary">重置所有</button>
                 </div>
 
@@ -161,8 +245,8 @@
     </div>
 
     <!-- 加载主脚本 -->
-    <script src="js/pointcloud.js"></script>
-    <script src="js/roi_selector.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/pointcloud.js?v=5"></script>
+    <script src="js/roi_selector.js?v=5"></script>
+    <script src="js/main.js?v=10"></script>
 </body>
 </html>

@@ -19,6 +19,7 @@ class ROSPointCloudApp {
         // 管理器
         this.pointCloudManager = null;
         this.roiSelector = null;
+        this.plannerVisualizer = null;
 
         // 订阅器
         this.poseSubscriber = null;
@@ -37,6 +38,8 @@ class ROSPointCloudApp {
         this.endPoint = null;
         this.startMarker = null;
         this.endMarker = null;
+        this.startUV = null;  // 起始点 UV 参数
+        this.endUV = null;    // 终点 UV 参数
 
         // 点选模式
         this.pickingMode = null; // 'start' or 'end'
@@ -134,11 +137,20 @@ class ROSPointCloudApp {
         this.roiInfo = document.getElementById('roi-info');
         this.transformModeSelect = document.getElementById('transform-mode');
 
+        // Planner 控制
+        this.convertMeshBtn = document.getElementById('convert-mesh-btn');
+        this.showSurfaceCheckbox = document.getElementById('show-surface');
+        this.showTrajectoryCheckbox = document.getElementById('show-trajectory');
+        this.surfaceStatus = document.getElementById('surface-status');
+        this.surfaceStatusText = document.getElementById('surface-status-text');
+
         // 目标点控制
         this.setStartBtn = document.getElementById('set-start-btn');
         this.setEndBtn = document.getElementById('set-end-btn');
         this.startPointInfo = document.getElementById('start-point-info');
         this.endPointInfo = document.getElementById('end-point-info');
+        this.startUVInfo = document.getElementById('start-uv-info');
+        this.endUVInfo = document.getElementById('end-uv-info');
 
         // 执行控制
         this.executeBtn = document.getElementById('execute-btn');
@@ -324,6 +336,29 @@ class ROSPointCloudApp {
             this.resetCrop();
         });
 
+        // Planner 控制按钮
+        if (this.convertMeshBtn) {
+            this.convertMeshBtn.addEventListener('click', () => {
+                this.convertMesh();
+            });
+        }
+
+        if (this.showSurfaceCheckbox) {
+            this.showSurfaceCheckbox.addEventListener('change', (e) => {
+                if (this.plannerVisualizer) {
+                    this.plannerVisualizer.setSurfaceVisible(e.target.checked);
+                }
+            });
+        }
+
+        if (this.showTrajectoryCheckbox) {
+            this.showTrajectoryCheckbox.addEventListener('change', (e) => {
+                if (this.plannerVisualizer) {
+                    this.plannerVisualizer.setTrajectoryVisible(e.target.checked);
+                }
+            });
+        }
+
         // 目标点设置按钮
         this.setStartBtn.addEventListener('click', () => {
             this.enterPickingMode('start');
@@ -417,6 +452,9 @@ class ROSPointCloudApp {
             this.renderer,
             this.transformControls
         );
+
+        // 初始化 Planner 可视化器
+        this.plannerVisualizer = new PlannerVisualizer(this.scene, this.ros);
 
         // 创建发布器
         this.roiPublisher = new ROSLIB.Topic({
@@ -585,7 +623,22 @@ class ROSPointCloudApp {
             return;
         }
 
+        console.log('创建 ROI 裁剪框...');
+        console.log('transformControls:', this.transformControls);
+        console.log('roiSelector:', this.roiSelector);
+
         this.roiSelector.create();
+
+        // 确保 transformControls 附加到 roiBox 并设置模式
+        if (this.transformControls && this.roiSelector.roiBox) {
+            this.transformControls.attach(this.roiSelector.roiBox);
+            const currentMode = this.transformModeSelect.value || 'translate';
+            if (currentMode !== 'scale') {
+                this.transformControls.setMode(currentMode);
+            }
+            console.log('TransformControls 已附加，模式:', currentMode);
+        }
+
         this.createRoiBtn.disabled = true;
         this.deleteRoiBtn.disabled = false;
         this.sendCropBtn.disabled = false;
@@ -612,32 +665,45 @@ class ROSPointCloudApp {
      * 更新 ROI 信息显示
      */
     updateROIInfo() {
+        // 安全检查
+        if (!this.roiSelector || !this.roiSelector.isROIActive()) return;
+
         const params = this.roiSelector.getParameters();
         if (!params) return;
 
-        const centerText = '(' + params.center.x.toFixed(2) + ', ' +
-                          params.center.y.toFixed(2) + ', ' +
-                          params.center.z.toFixed(2) + ')';
-        document.getElementById('roi-center').textContent = centerText;
+        const roiCenterEl = document.getElementById('roi-center');
+        const roiSizeEl = document.getElementById('roi-size');
 
-        const sizeText = '(' + params.size.x.toFixed(2) + ', ' +
-                        params.size.y.toFixed(2) + ', ' +
-                        params.size.z.toFixed(2) + ')';
-        document.getElementById('roi-size').textContent = sizeText;
+        if (roiCenterEl) {
+            const centerText = '(' + params.center.x.toFixed(2) + ', ' +
+                              params.center.y.toFixed(2) + ', ' +
+                              params.center.z.toFixed(2) + ')';
+            roiCenterEl.textContent = centerText;
+        }
 
-        const euler = new THREE.Euler().setFromQuaternion(
-            new THREE.Quaternion(
-                params.orientation.x,
-                params.orientation.y,
-                params.orientation.z,
-                params.orientation.w
-            )
-        );
+        if (roiSizeEl) {
+            const sizeText = '(' + params.size.x.toFixed(2) + ', ' +
+                            params.size.y.toFixed(2) + ', ' +
+                            params.size.z.toFixed(2) + ')';
+            roiSizeEl.textContent = sizeText;
+        }
 
-        const rotText = '(' + (euler.x * 180 / Math.PI).toFixed(1) + '°, ' +
-                       (euler.y * 180 / Math.PI).toFixed(1) + '°, ' +
-                       (euler.z * 180 / Math.PI).toFixed(1) + '°)';
-        document.getElementById('roi-rotation').textContent = rotText;
+        const roiRotationEl = document.getElementById('roi-rotation');
+        if (roiRotationEl) {
+            const euler = new THREE.Euler().setFromQuaternion(
+                new THREE.Quaternion(
+                    params.orientation.x,
+                    params.orientation.y,
+                    params.orientation.z,
+                    params.orientation.w
+                )
+            );
+
+            const rotText = '(' + (euler.x * 180 / Math.PI).toFixed(1) + '°, ' +
+                           (euler.y * 180 / Math.PI).toFixed(1) + '°, ' +
+                           (euler.z * 180 / Math.PI).toFixed(1) + '°)';
+            roiRotationEl.textContent = rotText;
+        }
     }
 
     /**
@@ -868,7 +934,7 @@ class ROSPointCloudApp {
                     secs: Math.floor(Date.now() / 1000),
                     nsecs: (Date.now() % 1000) * 1000000
                 },
-                frame_id: 'map'
+                frame_id: 'web_frame'
             },
             pose: {
                 position: {
@@ -904,7 +970,7 @@ class ROSPointCloudApp {
                     secs: Math.floor(Date.now() / 1000),
                     nsecs: (Date.now() % 1000) * 1000000
                 },
-                frame_id: 'map'
+                frame_id: 'web_frame'
             },
             poses: [
                 {
@@ -962,7 +1028,7 @@ class ROSPointCloudApp {
                     secs: Math.floor(Date.now() / 1000),
                     nsecs: (Date.now() % 1000) * 1000000
                 },
-                frame_id: 'map'
+                frame_id: 'web_frame'  // 使用web_frame坐标系，与Three.js一致
             },
             pose: {
                 position: {
@@ -1145,6 +1211,141 @@ class ROSPointCloudApp {
                 }
             }, 100);
         }
+    }
+
+    /**
+     * 转换曲面网格
+     */
+    convertMesh() {
+        if (!this.plannerVisualizer) {
+            this.log('Planner 可视化器未初始化', 'error');
+            return;
+        }
+
+        this.log('正在生成曲面网格...', 'info');
+        this.plannerVisualizer.triggerConvertMesh();
+
+        if (this.surfaceStatus) {
+            this.surfaceStatus.style.display = 'block';
+            this.surfaceStatusText.textContent = '生成中...';
+        }
+    }
+
+    /**
+     * 进入点选模式（增强版，支持游标）
+     */
+    enterPickingMode(mode) {
+        this.pickingMode = mode;
+        this.pickingModeOverlay.style.display = 'block';
+
+        // 启用游标模式
+        if (this.plannerVisualizer) {
+            this.plannerVisualizer.setCursorMode(true, (pos, uv) => {
+                this.onPointSelected(pos, uv, mode);
+            });
+        }
+
+        this.log(`进入${mode === 'start' ? '起始' : '末端'}点选择模式`, 'info');
+    }
+
+    /**
+     * 退出点选模式
+     */
+    exitPickingMode() {
+        this.pickingMode = null;
+        this.pickingModeOverlay.style.display = 'none';
+
+        // 禁用游标模式
+        if (this.plannerVisualizer) {
+            this.plannerVisualizer.setCursorMode(false);
+        }
+
+        this.log('退出点选模式', 'info');
+    }
+
+    /**
+     * 点选确认（当用户点击确认选择点时）
+     */
+    onPointSelected(pos, uv, mode) {
+        if (mode === 'start') {
+            this.startPoint = pos;
+            this.startUV = uv;
+            this.startPointInfo.textContent = `(${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`;
+            if (this.startUVInfo) {
+                this.startUVInfo.textContent = `(${uv.u.toFixed(3)}, ${uv.v.toFixed(3)})`;
+            }
+            this.log(`起始点已设置: UV=(${uv.u.toFixed(3)}, ${uv.v.toFixed(3)})`, 'success');
+        } else if (mode === 'end') {
+            this.endPoint = pos;
+            this.endUV = uv;
+            this.endPointInfo.textContent = `(${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`;
+            if (this.endUVInfo) {
+                this.endUVInfo.textContent = `(${uv.u.toFixed(3)}, ${uv.v.toFixed(3)})`;
+            }
+            this.log(`末端点已设置: UV=(${uv.u.toFixed(3)}, ${uv.v.toFixed(3)})`, 'success');
+        }
+
+        // 检查是否可以执行
+        if (this.startPoint && this.endPoint && this.executeBtn) {
+            this.executeBtn.disabled = false;
+        }
+
+        this.exitPickingMode();
+    }
+
+    /**
+     * 执行任务（增强版，发送轨迹规划请求）
+     */
+    executeTask() {
+        if (!this.startUV || !this.endUV) {
+            this.log('请先设置起始点和末端点', 'warning');
+            return;
+        }
+
+        if (!this.plannerVisualizer) {
+            this.log('Planner 可视化器未初始化', 'error');
+            return;
+        }
+
+        this.log('正在规划轨迹...', 'info');
+        this.plannerVisualizer.sendPlanTrajectoryRequest(this.startUV, this.endUV);
+    }
+
+    /**
+     * 重置所有（增强版）
+     */
+    resetAll() {
+        // 重置目标点
+        this.startPoint = null;
+        this.endPoint = null;
+        this.startUV = null;
+        this.endUV = null;
+        this.startPointInfo.textContent = '未设置';
+        this.endPointInfo.textContent = '未设置';
+        if (this.startUVInfo) this.startUVInfo.textContent = '-';
+        if (this.endUVInfo) this.endUVInfo.textContent = '-';
+
+        // 清除标记
+        if (this.startMarker) {
+            this.scene.remove(this.startMarker);
+            this.startMarker = null;
+        }
+        if (this.endMarker) {
+            this.scene.remove(this.endMarker);
+            this.endMarker = null;
+        }
+
+        // 清除 Planner 可视化
+        if (this.plannerVisualizer) {
+            this.plannerVisualizer.clearTrajectory();
+        }
+
+        // 禁用执行按钮
+        if (this.executeBtn) {
+            this.executeBtn.disabled = true;
+        }
+
+        this.log('已重置所有设置', 'info');
     }
 }
 

@@ -25,11 +25,11 @@ class PointCloudManager {
             this.updateInterval = 100; // 降低更新间隔以确保能收到裁剪后的点云
             console.log('检测到安卓9设备，使用低性能模式');
         } else if (this.isMobile) {
-            this.maxPoints = 100000; // 其他移动设备限制为10万点
+            this.maxPoints = 1500000; // 其他移动设备限制为10万点
             this.updateInterval = 80;
             console.log('检测到移动设备，使用移动端优化模式');
         } else {
-            this.maxPoints = 500000; // 桌面设备50万点
+            this.maxPoints = 1500000; // 桌面设备50万点
             this.updateInterval = 50;
         }
 
@@ -216,29 +216,34 @@ class PointCloudManager {
         }
 
         // 计算点数
-        const numPoints = Math.min(
-            Math.floor(data.length / pointStep),
-            this.maxPoints
-        );
+        // const numPoints = Math.min(
+        //     Math.floor(data.length / pointStep),
+        //     this.maxPoints
+        // );
 
-        // 采样间隔（如果点太多，进行下采样）
-        const step = Math.max(1, Math.floor(numPoints / this.maxPoints));
+        // // 采样间隔（如果点太多，进行下采样）
+        // const step = Math.max(1, Math.floor(numPoints / this.maxPoints));
+        // 计算原始点数
+        const totalPoints = Math.floor(data.length / pointStep);
+
+        // 根据 maxPoints 计算均匀采样间隔
+        const step = Math.max(1, Math.ceil(totalPoints / this.maxPoints));
+
+        let parsedCount = 0;
+
+        // 解析每个点，最多解析 this.maxPoints 个
+        for (let i = 0; i < totalPoints && parsedCount < this.maxPoints; i += step) {
 
         // 解析每个点
-        for (let i = 0; i < numPoints; i += step) {
+        // for (let i = 0; i < numPoints; i += step) {
             const offset = i * pointStep;
 
             // 读取 x, y, z 坐标（假设是 float32）
-            // ROS 坐标系: X-前, Y-左, Z-上
-            // Three.js 坐标系: X-右, Y-上, Z-前
-            // 转换: Three.x = ROS.x, Three.y = ROS.z, Three.z = -ROS.y
-            const rosX = this.readFloat32(data, offset + xOffset);
-            const rosY = this.readFloat32(data, offset + yOffset);
-            const rosZ = this.readFloat32(data, offset + zOffset);
-
-            const x = rosX;
-            const y = rosZ;  // ROS Z -> Three.js Y (上)
-            const z = -rosY; // ROS Y -> Three.js -Z
+            // 点云已在ROS端转换到web_frame坐标系，与Three.js坐标系一致
+            // 无需在前端进行坐标转换
+            const x = this.readFloat32(data, offset + xOffset);
+            const y = this.readFloat32(data, offset + yOffset);
+            const z = this.readFloat32(data, offset + zOffset);
 
             // 检查是否为有效值
             if (isNaN(x) || isNaN(y) || isNaN(z) ||
@@ -247,6 +252,7 @@ class PointCloudManager {
             }
 
             positions.push(x, y, z);
+            parsedCount++;
 
             // 读取颜色（如果有）
             if (rgbOffset !== -1) {
@@ -256,8 +262,8 @@ class PointCloudManager {
                 const b = (rgb & 0xFF) / 255.0;
                 colors.push(r, g, b);
             } else {
-                // 默认颜色（根据高度着色）
-                const heightColor = (z + 2) / 4; // 假设高度范围 -2 到 2
+                // 默认颜色（根据高度着色，Y轴为高度）
+                const heightColor = (y + 2) / 4; // 假设高度范围 -2 到 2
                 colors.push(heightColor, 1 - heightColor, 0.5);
             }
         }
@@ -334,6 +340,14 @@ class PointCloudManager {
         if (this.pointsMaterial) {
             this.pointsMaterial.size = size;
         }
+    }
+
+    /**
+     * 设置前端最大显示点数
+     */
+    setMaxPoints(maxPoints) {
+        this.maxPoints = Math.max(1000, parseInt(maxPoints));
+        console.log(`前端点云最大显示点数设置为: ${this.maxPoints}`);
     }
 
     /**

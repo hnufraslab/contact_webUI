@@ -348,12 +348,12 @@ body {
 #mobile-menu-toggle {
     display: none;
     position: fixed;
-    top: 10px;
+    bottom: 10px;
     left: 10px;
     z-index: 200;
     width: 50px;
     height: 50px;
-    background: rgba(76, 175, 80, 0.6);
+    background: rgba(76, 175, 80, 0.9);
     border: none;
     border-radius: 8px;
     color: white;
@@ -391,23 +391,26 @@ body {
     }
 
     #container {
-        flex-direction: column-reverse;
+        flex-direction: column;
     }
 
     #sidebar {
         position: fixed;
-        top: 0;
+        bottom: 0;
         left: 0;
         width: 100%;
-        height: 100vh;
+        height: 40vh;
+        max-height: 400px;
         z-index: 150;
-        transform: translateX(-100%);
+        transform: translateY(calc(100% - 60px));
         transition: transform 0.3s ease;
         overflow-y: auto;
+        box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.5);
+        border-radius: 20px 20px 0 0;
     }
 
     #sidebar.mobile-open {
-        transform: translateX(0);
+        transform: translateY(0);
     }
 
     #viewport {
@@ -417,7 +420,7 @@ body {
 
     .panel {
         padding: 15px;
-        padding-top: 70px; /* 为关闭按钮留空间 */
+        padding-top: 50px; /* 为拖动条留空间 */
     }
 
     .panel h2 {
@@ -515,21 +518,28 @@ body {
         display: none;
     }
 
-    /* 移动端关闭按钮 */
+    /* 移动端关闭按钮改为拖动指示条 */
     #mobile-close-btn {
         display: block;
         position: absolute;
-        top: 15px;
-        right: 15px;
-        width: 40px;
-        height: 40px;
-        background: #f44336;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 5px;
+        background: #666;
         border: none;
-        border-radius: 50%;
-        color: white;
-        font-size: 20px;
+        border-radius: 3px;
         cursor: pointer;
         z-index: 160;
+        font-size: 0; /* 隐藏文字 */
+    }
+
+    #mobile-close-btn::before {
+        content: '';
+        display: block;
+        width: 100%;
+        height: 100%;
     }
 }
 

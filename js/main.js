@@ -26,8 +26,12 @@ class ROSPointCloudApp {
         // 发布器
         this.roiPublisher = null;
         this.goalPointsPublisher = null;
+        this.convertMeshTriggerPublisher = null;
+        this.accumulationFramesPublisher = null;
 
         // 状态
+        this.surfaceFitted = false;  // 曲面是否已拟合
+        this.meshGroup = null;  // 网格可视化组
         this.dronePosition = { x: 0, y: 0, z: 0 };
         this.droneOrientation = { x: 0, y: 0, z: 0, w: 1 };
         this.droneMesh = null;
@@ -126,6 +130,10 @@ class ROSPointCloudApp {
         this.poseTopicInput = document.getElementById('pose-topic');
         this.pointSizeSlider = document.getElementById('point-size');
         this.pointSizeValue = document.getElementById('point-size-value');
+        this.cloudDensitySlider = document.getElementById('cloud-density');
+        this.cloudDensityValue = document.getElementById('cloud-density-value');
+        this.accumulationFramesSlider = document.getElementById('accumulation-frames');
+        this.accumulationFramesValue = document.getElementById('accumulation-frames-value');
         this.showDroneCheckbox = document.getElementById('show-drone');
 
         // ROI 控制
@@ -134,14 +142,22 @@ class ROSPointCloudApp {
         this.roiInfo = document.getElementById('roi-info');
         this.transformModeSelect = document.getElementById('transform-mode');
 
-        // 目标点控制
-        this.setStartBtn = document.getElementById('set-start-btn');
-        this.setEndBtn = document.getElementById('set-end-btn');
+        // UV 滑块控制
+        this.startUSlider = document.getElementById('start-u-slider');
+        this.startVSlider = document.getElementById('start-v-slider');
+        this.startUValue = document.getElementById('start-u-value');
+        this.startVValue = document.getElementById('start-v-value');
+        this.goalUSlider = document.getElementById('goal-u-slider');
+        this.goalVSlider = document.getElementById('goal-v-slider');
+        this.goalUValue = document.getElementById('goal-u-value');
+        this.goalVValue = document.getElementById('goal-v-value');
         this.startPointInfo = document.getElementById('start-point-info');
-        this.endPointInfo = document.getElementById('end-point-info');
+        this.goalPointInfo = document.getElementById('goal-point-info');
+        this.numSamplesInput = document.getElementById('num-samples');
+        this.planningTimeoutInput = document.getElementById('planning-timeout');
 
         // 执行控制
-        this.executeBtn = document.getElementById('execute-btn');
+        this.executePlanningBtn = document.getElementById('execute-planning-btn');
         this.resetBtn = document.getElementById('reset-btn');
 
         // 裁剪控制
@@ -149,6 +165,11 @@ class ROSPointCloudApp {
         this.resetCropBtn = document.getElementById('reset-crop-btn');
         this.cropStatus = document.getElementById('crop-status');
         this.cropStatusText = document.getElementById('crop-status-text');
+
+        // 曲面拟合控制
+        this.generateSurfaceBtn = document.getElementById('generate-surface-btn');
+        this.clearSurfaceBtn = document.getElementById('clear-surface-btn');
+        this.surfaceStatusText = document.getElementById('surface-status-text');
 
         // 日志
         this.logContainer = document.getElementById('log-container');
@@ -292,6 +313,38 @@ class ROSPointCloudApp {
             }
         });
 
+        // 点云密度滑块：控制后端发布给网页端的最大点数
+        if (this.cloudDensitySlider) {
+            this.cloudDensitySlider.addEventListener('input', (e) => {
+                const maxPoints = parseInt(e.target.value);
+
+                this.cloudDensityValue.textContent = maxPoints;
+
+                // 前端显示上限也同步调整
+                if (this.pointCloudManager && this.pointCloudManager.setMaxPoints) {
+                    this.pointCloudManager.setMaxPoints(maxPoints);
+                }
+
+                // 发布给后端 pointcloud_processor.py
+                this.publishCloudDensity();
+
+                this.log(`点云密度已设置为最大 ${maxPoints} 点`, 'info');
+            });
+        }
+
+        // 累计帧数滑块：控制后端累计多少帧点云
+        if (this.accumulationFramesSlider) {
+            this.accumulationFramesSlider.addEventListener('input', (e) => {
+                const frames = parseInt(e.target.value);
+
+                this.accumulationFramesValue.textContent = frames;
+
+                this.publishAccumulationFrames();
+
+                this.log(`累计帧数已设置为 ${frames} 帧`, 'info');
+            });
+        }
+
         // 显示无人机复选框
         this.showDroneCheckbox.addEventListener('change', (e) => {
             if (this.droneMesh) {
@@ -324,18 +377,48 @@ class ROSPointCloudApp {
             this.resetCrop();
         });
 
+        // 曲面拟合按钮
+        if (this.generateSurfaceBtn) {
+            this.generateSurfaceBtn.addEventListener('click', () => {
+                this.generateSurface();
+            });
+        }
+
+        if (this.clearSurfaceBtn) {
+            this.clearSurfaceBtn.addEventListener('click', () => {
+                this.clearSurface();
+            });
+        }
+
         // 目标点设置按钮
-        this.setStartBtn.addEventListener('click', () => {
-            this.enterPickingMode('start');
+        // UV 滑块事件监听
+        this.startUSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            this.startUValue.textContent = value.toFixed(2);
+            this.publishStartUV();
         });
 
-        this.setEndBtn.addEventListener('click', () => {
-            this.enterPickingMode('end');
+        this.startVSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            this.startVValue.textContent = value.toFixed(2);
+            this.publishStartUV();
         });
 
-        // 执行按钮
-        this.executeBtn.addEventListener('click', () => {
-            this.executeTask();
+        this.goalUSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            this.goalUValue.textContent = value.toFixed(2);
+            this.publishGoalUV();
+        });
+
+        this.goalVSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            this.goalVValue.textContent = value.toFixed(2);
+            this.publishGoalUV();
+        });
+
+        // 执行规划按钮
+        this.executePlanningBtn.addEventListener('click', () => {
+            this.executePlanning();
         });
 
         // 重置按钮
@@ -452,7 +535,30 @@ class ROSPointCloudApp {
             messageType: 'std_msgs/Bool'
         });
 
+        // 点云密度控制发布器
+        this.cloudMaxPointsPublisher = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planning/cloud_max_points',
+            messageType: 'std_msgs/Int32'
+        });
+
+        // 累计帧数控制发布器
+        this.accumulationFramesPublisher = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planning/accumulation_frames',
+            messageType: 'std_msgs/Int32'
+        });
+
+        // 曲面拟合触发发布器
+        this.convertMeshTriggerPublisher = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/convert_mesh_trigger',
+            messageType: 'std_msgs/Bool'
+        });
+
         this.log('管理器初始化完成', 'info');
+        this.publishCloudDensity();
+        this.publishAccumulationFrames();
     }
 
     /**
@@ -478,8 +584,79 @@ class ROSPointCloudApp {
 
         this.log(`已订阅位姿: ${poseTopic}`, 'info');
 
+        // 订阅起始点曲面点和法向量
+        this.startSurfacePointSub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/start_surface_point',
+            messageType: 'geometry_msgs/PointStamped'
+        });
+
+        this.startSurfacePointSub.subscribe((message) => {
+            this.updateStartSurfacePoint(message);
+        });
+
+        this.startSurfaceNormalSub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/start_surface_normal',
+            messageType: 'geometry_msgs/Vector3'
+        });
+
+        this.startSurfaceNormalSub.subscribe((message) => {
+            this.updateStartSurfaceNormal(message);
+        });
+
+        // 订阅终点曲面点和法向量
+        this.goalSurfacePointSub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/goal_surface_point',
+            messageType: 'geometry_msgs/PointStamped'
+        });
+
+        this.goalSurfacePointSub.subscribe((message) => {
+            this.updateGoalSurfacePoint(message);
+        });
+
+        this.goalSurfaceNormalSub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/goal_surface_normal',
+            messageType: 'geometry_msgs/Vector3'
+        });
+
+        this.goalSurfaceNormalSub.subscribe((message) => {
+            this.updateGoalSurfaceNormal(message);
+        });
+
+        // 订阅轨迹数据
+        this.trajectorySub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/trajectory',
+            messageType: 'visualization_msgs/MarkerArray'
+        });
+
+        this.trajectorySub.subscribe((message) => {
+            this.updateTrajectory(message);
+        });
+
+        this.log('已订阅规划器 topics', 'info');
+
+        // 订阅网格数据
+        this.meshSub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/mesh',
+            messageType: 'visualization_msgs/MarkerArray'
+        });
+
+        this.meshSub.subscribe((message) => {
+            this.updateMesh(message);
+        });
+
+        this.log('已订阅网格数据 topic', 'info');
+
         // 创建无人机模型
         this.createDroneModel();
+
+        // 创建 UV 发布器
+        this.setupUVPublishers();
     }
 
     /**
@@ -585,7 +762,22 @@ class ROSPointCloudApp {
             return;
         }
 
+        console.log('创建 ROI 裁剪框...');
+        console.log('transformControls:', this.transformControls);
+        console.log('roiSelector:', this.roiSelector);
+
         this.roiSelector.create();
+
+        // 确保 transformControls 附加到 roiBox 并设置模式
+        if (this.transformControls && this.roiSelector.roiBox) {
+            this.transformControls.attach(this.roiSelector.roiBox);
+            const currentMode = this.transformModeSelect.value || 'translate';
+            if (currentMode !== 'scale') {
+                this.transformControls.setMode(currentMode);
+            }
+            console.log('TransformControls 已附加，模式:', currentMode);
+        }
+
         this.createRoiBtn.disabled = true;
         this.deleteRoiBtn.disabled = false;
         this.sendCropBtn.disabled = false;
@@ -612,32 +804,45 @@ class ROSPointCloudApp {
      * 更新 ROI 信息显示
      */
     updateROIInfo() {
+        // 安全检查
+        if (!this.roiSelector || !this.roiSelector.isROIActive()) return;
+
         const params = this.roiSelector.getParameters();
         if (!params) return;
 
-        const centerText = '(' + params.center.x.toFixed(2) + ', ' +
-                          params.center.y.toFixed(2) + ', ' +
-                          params.center.z.toFixed(2) + ')';
-        document.getElementById('roi-center').textContent = centerText;
+        const roiCenterEl = document.getElementById('roi-center');
+        const roiSizeEl = document.getElementById('roi-size');
 
-        const sizeText = '(' + params.size.x.toFixed(2) + ', ' +
-                        params.size.y.toFixed(2) + ', ' +
-                        params.size.z.toFixed(2) + ')';
-        document.getElementById('roi-size').textContent = sizeText;
+        if (roiCenterEl) {
+            const centerText = '(' + params.center.x.toFixed(2) + ', ' +
+                              params.center.y.toFixed(2) + ', ' +
+                              params.center.z.toFixed(2) + ')';
+            roiCenterEl.textContent = centerText;
+        }
 
-        const euler = new THREE.Euler().setFromQuaternion(
-            new THREE.Quaternion(
-                params.orientation.x,
-                params.orientation.y,
-                params.orientation.z,
-                params.orientation.w
-            )
-        );
+        if (roiSizeEl) {
+            const sizeText = '(' + params.size.x.toFixed(2) + ', ' +
+                            params.size.y.toFixed(2) + ', ' +
+                            params.size.z.toFixed(2) + ')';
+            roiSizeEl.textContent = sizeText;
+        }
 
-        const rotText = '(' + (euler.x * 180 / Math.PI).toFixed(1) + '°, ' +
-                       (euler.y * 180 / Math.PI).toFixed(1) + '°, ' +
-                       (euler.z * 180 / Math.PI).toFixed(1) + '°)';
-        document.getElementById('roi-rotation').textContent = rotText;
+        const roiRotationEl = document.getElementById('roi-rotation');
+        if (roiRotationEl) {
+            const euler = new THREE.Euler().setFromQuaternion(
+                new THREE.Quaternion(
+                    params.orientation.x,
+                    params.orientation.y,
+                    params.orientation.z,
+                    params.orientation.w
+                )
+            );
+
+            const rotText = '(' + (euler.x * 180 / Math.PI).toFixed(1) + '°, ' +
+                           (euler.y * 180 / Math.PI).toFixed(1) + '°, ' +
+                           (euler.z * 180 / Math.PI).toFixed(1) + '°)';
+            roiRotationEl.textContent = rotText;
+        }
     }
 
     /**
@@ -868,7 +1073,7 @@ class ROSPointCloudApp {
                     secs: Math.floor(Date.now() / 1000),
                     nsecs: (Date.now() % 1000) * 1000000
                 },
-                frame_id: 'map'
+                frame_id: 'web_frame'
             },
             pose: {
                 position: {
@@ -904,7 +1109,7 @@ class ROSPointCloudApp {
                     secs: Math.floor(Date.now() / 1000),
                     nsecs: (Date.now() % 1000) * 1000000
                 },
-                frame_id: 'map'
+                frame_id: 'web_frame'
             },
             poses: [
                 {
@@ -962,7 +1167,7 @@ class ROSPointCloudApp {
                     secs: Math.floor(Date.now() / 1000),
                     nsecs: (Date.now() % 1000) * 1000000
                 },
-                frame_id: 'map'
+                frame_id: 'web_frame'  // 使用web_frame坐标系，与Three.js一致
             },
             pose: {
                 position: {
@@ -995,6 +1200,9 @@ class ROSPointCloudApp {
         this.cropStatusText.textContent = '已发送裁剪框';
         this.cropStatusText.style.color = '#4CAF50';
         this.resetCropBtn.disabled = false;
+
+        // 启用生产曲面按钮
+        this.generateSurfaceBtn.disabled = false;
 
         // 强制刷新点云以获取裁剪后的数据
         if (this.pointCloudManager) {
@@ -1042,24 +1250,326 @@ class ROSPointCloudApp {
             this.deleteROI();
         }
 
-        // 清除起始点
+        // 清除起始点和终点的可视化
         if (this.startMarker) {
             this.scene.remove(this.startMarker);
             this.startMarker = null;
         }
-        this.startPoint = null;
-        this.startPointInfo.textContent = '未设置';
-
-        // 清除末端点
-        if (this.endMarker) {
-            this.scene.remove(this.endMarker);
-            this.endMarker = null;
+        if (this.startNormalArrow) {
+            this.scene.remove(this.startNormalArrow);
+            this.startNormalArrow = null;
         }
-        this.endPoint = null;
-        this.endPointInfo.textContent = '未设置';
+        if (this.goalMarker) {
+            this.scene.remove(this.goalMarker);
+            this.goalMarker = null;
+        }
+        if (this.goalNormalArrow) {
+            this.scene.remove(this.goalNormalArrow);
+            this.goalNormalArrow = null;
+        }
 
-        this.updateExecuteButton();
+        // 清除轨迹
+        if (this.trajectoryGroup) {
+            this.scene.remove(this.trajectoryGroup);
+            this.trajectoryGroup = null;
+        }
+
+        this.startPointInfo.textContent = '未设置';
+        this.goalPointInfo.textContent = '未设置';
+
         this.log('已重置所有设置', 'info');
+    }
+
+    /**
+     * 设置 UV 发布器
+     */
+    setupUVPublishers() {
+        // 创建起始点 UV 发布器
+        this.startUVPub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/start_uv',
+            messageType: 'geometry_msgs/Vector3'
+        });
+
+        // 创建终点 UV 发布器
+        this.goalUVPub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/goal_uv',
+            messageType: 'geometry_msgs/Vector3'
+        });
+
+        // 创建规划触发发布器
+        this.planTriggerPub = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/plan_trigger',
+            messageType: 'std_msgs/Bool'
+        });
+
+        // 初始化时发布一次 UV 参数
+        this.publishStartUV();
+        this.publishGoalUV();
+    }
+
+    /**
+     * 发布点云密度设置到后端 pointcloud_processor.py
+     */
+    publishCloudDensity() {
+        if (!this.cloudDensitySlider) {
+            return;
+        }
+
+        const maxPoints = parseInt(this.cloudDensitySlider.value);
+
+        if (this.cloudDensityValue) {
+            this.cloudDensityValue.textContent = maxPoints;
+        }
+
+        // 同步前端 pointcloud.js 的显示上限
+        if (this.pointCloudManager && this.pointCloudManager.setMaxPoints) {
+            this.pointCloudManager.setMaxPoints(maxPoints);
+        }
+
+        if (!this.isConnected || !this.cloudMaxPointsPublisher) {
+            return;
+        }
+
+        const message = new ROSLIB.Message({
+            data: maxPoints
+        });
+
+        this.cloudMaxPointsPublisher.publish(message);
+    }
+
+    /**
+     * 发布累计帧数设置到后端 pointcloud_processor.py
+     */
+    publishAccumulationFrames() {
+        if (!this.accumulationFramesSlider) {
+            return;
+        }
+
+        const frames = parseInt(this.accumulationFramesSlider.value);
+
+        if (this.accumulationFramesValue) {
+            this.accumulationFramesValue.textContent = frames;
+        }
+
+        if (!this.isConnected || !this.accumulationFramesPublisher) {
+            return;
+        }
+
+        const message = new ROSLIB.Message({
+            data: frames
+        });
+
+        this.accumulationFramesPublisher.publish(message);
+    }
+
+    /**
+     * 发布起始点 UV 参数
+     */
+    publishStartUV() {
+        if (!this.startUVPub) return;
+
+        const u = parseFloat(this.startUSlider.value);
+        const v = parseFloat(this.startVSlider.value);
+
+        const message = new ROSLIB.Message({
+            x: u,
+            y: v,
+            z: 0.0
+        });
+
+        this.startUVPub.publish(message);
+    }
+
+    /**
+     * 发布终点 UV 参数
+     */
+    publishGoalUV() {
+        if (!this.goalUVPub) return;
+
+        const u = parseFloat(this.goalUSlider.value);
+        const v = parseFloat(this.goalVSlider.value);
+
+        const message = new ROSLIB.Message({
+            x: u,
+            y: v,
+            z: 0.0
+        });
+
+        this.goalUVPub.publish(message);
+    }
+
+    /**
+     * 更新起始点曲面点
+     */
+    updateStartSurfacePoint(message) {
+        const point = message.point;
+
+        // 移除旧的标记
+        if (this.startMarker) {
+            this.scene.remove(this.startMarker);
+        }
+
+        // 创建新的球体标记
+        const geometry = new THREE.SphereGeometry(0.05, 16, 16);
+        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        this.startMarker = new THREE.Mesh(geometry, material);
+        this.startMarker.position.set(point.x, point.y, point.z);
+        this.scene.add(this.startMarker);
+
+        // 更新信息显示
+        this.startPointInfo.textContent = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`;
+
+        // 启用执行按钮
+        this.updatePlanningButton();
+    }
+
+    /**
+     * 更新起始点法向量
+     */
+    updateStartSurfaceNormal(message) {
+        if (!this.startMarker) return;
+
+        // 移除旧的箭头
+        if (this.startNormalArrow) {
+            this.scene.remove(this.startNormalArrow);
+        }
+
+        // 创建法向量箭头
+        const origin = this.startMarker.position;
+        const direction = new THREE.Vector3(message.x, message.y, message.z).normalize();
+        const length = 0.2;
+        const color = 0x0000ff;
+
+        this.startNormalArrow = new THREE.ArrowHelper(direction, origin, length, color, 0.05, 0.03);
+        this.scene.add(this.startNormalArrow);
+    }
+
+    /**
+     * 更新终点曲面点
+     */
+    updateGoalSurfacePoint(message) {
+        const point = message.point;
+
+        // 移除旧的标记
+        if (this.goalMarker) {
+            this.scene.remove(this.goalMarker);
+        }
+
+        // 创建新的球体标记
+        const geometry = new THREE.SphereGeometry(0.05, 16, 16);
+        const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        this.goalMarker = new THREE.Mesh(geometry, material);
+        this.goalMarker.position.set(point.x, point.y, point.z);
+        this.scene.add(this.goalMarker);
+
+        // 更新信息显示
+        this.goalPointInfo.textContent = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`;
+
+        // 启用执行按钮
+        this.updatePlanningButton();
+    }
+
+    /**
+     * 更新终点法向量
+     */
+    updateGoalSurfaceNormal(message) {
+        if (!this.goalMarker) return;
+
+        // 移除旧的箭头
+        if (this.goalNormalArrow) {
+            this.scene.remove(this.goalNormalArrow);
+        }
+
+        // 创建法向量箭头
+        const origin = this.goalMarker.position;
+        const direction = new THREE.Vector3(message.x, message.y, message.z).normalize();
+        const length = 0.2;
+        const color = 0x0000ff;
+
+        this.goalNormalArrow = new THREE.ArrowHelper(direction, origin, length, color, 0.05, 0.03);
+        this.scene.add(this.goalNormalArrow);
+    }
+
+    /**
+     * 更新规划按钮状态
+     */
+    updatePlanningButton() {
+        const hasStartPoint = this.startMarker !== null && this.startMarker !== undefined;
+        const hasGoalPoint = this.goalMarker !== null && this.goalMarker !== undefined;
+        this.executePlanningBtn.disabled = !(hasStartPoint && hasGoalPoint);
+    }
+
+    /**
+     * 执行轨迹规划
+     */
+    executePlanning() {
+        if (!this.planTriggerPub) {
+            this.log('规划触发器未初始化', 'error');
+            return;
+        }
+
+        this.log('开始执行轨迹规划...', 'info');
+
+        const message = new ROSLIB.Message({
+            data: true
+        });
+
+        this.planTriggerPub.publish(message);
+    }
+
+    /**
+     * 更新轨迹显示
+     */
+    updateTrajectory(message) {
+        // 移除旧的轨迹
+        if (this.trajectoryGroup) {
+            this.scene.remove(this.trajectoryGroup);
+        }
+
+        this.trajectoryGroup = new THREE.Group();
+
+        // 解析 MarkerArray
+        for (const marker of message.markers) {
+            if (marker.ns === 'surface_trajectory') {
+                // 曲面轨迹线
+                const points = [];
+                for (const point of marker.points) {
+                    points.push(new THREE.Vector3(point.x, point.y, point.z));
+                }
+
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: new THREE.Color(marker.color.r, marker.color.g, marker.color.b),
+                    linewidth: 2
+                });
+                const line = new THREE.Line(geometry, material);
+                this.trajectoryGroup.add(line);
+
+            } else if (marker.ns === 'surface_normals') {
+                // 法向量箭头
+                if (marker.points.length >= 2) {
+                    const start = marker.points[0];
+                    const end = marker.points[1];
+                    const origin = new THREE.Vector3(start.x, start.y, start.z);
+                    const direction = new THREE.Vector3(
+                        end.x - start.x,
+                        end.y - start.y,
+                        end.z - start.z
+                    ).normalize();
+                    const length = origin.distanceTo(new THREE.Vector3(end.x, end.y, end.z));
+                    const color = new THREE.Color(marker.color.r, marker.color.g, marker.color.b);
+
+                    const arrow = new THREE.ArrowHelper(direction, origin, length, color.getHex(), 0.02, 0.015);
+                    this.trajectoryGroup.add(arrow);
+                }
+            }
+        }
+
+        this.scene.add(this.trajectoryGroup);
+        this.log(`轨迹已更新: ${message.markers.length} 个标记`, 'success');
     }
 
     /**
@@ -1144,6 +1654,119 @@ class ROSPointCloudApp {
                     this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
                 }
             }, 100);
+        }
+    }
+
+    /**
+     * 生产曲面
+     */
+    generateSurface() {
+        console.log('generateSurface 被调用');
+        console.log('isConnected:', this.isConnected);
+        console.log('convertMeshTriggerPublisher:', this.convertMeshTriggerPublisher);
+
+        if (!this.isConnected) {
+            this.log('请先连接到 ROS', 'error');
+            return;
+        }
+
+        if (!this.convertMeshTriggerPublisher) {
+            this.log('曲面拟合发布器未初始化', 'error');
+            return;
+        }
+
+        this.log('正在生产曲面...', 'info');
+
+        // 发送触发信号到 gRPC bridge
+        const message = new ROSLIB.Message({
+            data: true
+        });
+
+        this.convertMeshTriggerPublisher.publish(message);
+
+        // 更新 UI 状态
+        this.surfaceStatusText.textContent = '正在拟合...';
+        this.surfaceStatusText.style.color = '#FFB74D';
+        this.generateSurfaceBtn.disabled = true;
+
+        this.log('已发送曲面拟合请求', 'success');
+    }
+
+    /**
+     * 取消曲面
+     */
+    clearSurface() {
+        // 移除网格可视化
+        if (this.meshGroup) {
+            this.scene.remove(this.meshGroup);
+            this.meshGroup = null;
+        }
+
+        // 更新状态
+        this.surfaceFitted = false;
+        this.surfaceStatusText.textContent = '未拟合';
+        this.surfaceStatusText.style.color = '#666';
+        this.clearSurfaceBtn.disabled = true;
+        this.generateSurfaceBtn.disabled = false;
+
+        this.log('已清除曲面', 'info');
+    }
+
+    /**
+     * 更新网格显示
+     */
+    updateMesh(message) {
+        try {
+            // 移除旧的网格
+            if (this.meshGroup) {
+                this.scene.remove(this.meshGroup);
+            }
+
+            this.meshGroup = new THREE.Group();
+
+            // 解析 MarkerArray
+            for (const marker of message.markers) {
+                if (marker.ns === 'surface_mesh' && marker.type === 11) { // TRIANGLE_LIST = 11
+                    // 创建网格几何体
+                    const geometry = new THREE.BufferGeometry();
+                    const vertices = [];
+
+                    // 提取顶点
+                    for (const point of marker.points) {
+                        vertices.push(point.x, point.y, point.z);
+                    }
+
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                    geometry.computeVertexNormals();
+
+                    // 创建材质
+                    const material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(marker.color.r, marker.color.g, marker.color.b),
+                        transparent: true,
+                        opacity: marker.color.a,
+                        side: THREE.DoubleSide,
+                        flatShading: false
+                    });
+
+                    // 创建网格
+                    const mesh = new THREE.Mesh(geometry, material);
+                    this.meshGroup.add(mesh);
+                }
+            }
+
+            this.scene.add(this.meshGroup);
+
+            // 更新状态
+            this.surfaceFitted = true;
+            this.surfaceStatusText.textContent = '已拟合';
+            this.surfaceStatusText.style.color = '#4CAF50';
+            this.clearSurfaceBtn.disabled = false;
+            this.generateSurfaceBtn.disabled = false;
+
+            this.log(`曲面网格已更新: ${message.markers.length} 个标记`, 'success');
+
+        } catch (error) {
+            this.log(`更新网格失败: ${error}`, 'error');
         }
     }
 }

@@ -229,16 +229,11 @@ class PointCloudManager {
             const offset = i * pointStep;
 
             // 读取 x, y, z 坐标（假设是 float32）
-            // ROS 坐标系: X-前, Y-左, Z-上
-            // Three.js 坐标系: X-右, Y-上, Z-前
-            // 转换: Three.x = ROS.x, Three.y = ROS.z, Three.z = -ROS.y
-            const rosX = this.readFloat32(data, offset + xOffset);
-            const rosY = this.readFloat32(data, offset + yOffset);
-            const rosZ = this.readFloat32(data, offset + zOffset);
-
-            const x = rosX;
-            const y = rosZ;  // ROS Z -> Three.js Y (上)
-            const z = -rosY; // ROS Y -> Three.js -Z
+            // 点云已在ROS端转换到web_frame坐标系，与Three.js坐标系一致
+            // 无需在前端进行坐标转换
+            const x = this.readFloat32(data, offset + xOffset);
+            const y = this.readFloat32(data, offset + yOffset);
+            const z = this.readFloat32(data, offset + zOffset);
 
             // 检查是否为有效值
             if (isNaN(x) || isNaN(y) || isNaN(z) ||
@@ -256,8 +251,8 @@ class PointCloudManager {
                 const b = (rgb & 0xFF) / 255.0;
                 colors.push(r, g, b);
             } else {
-                // 默认颜色（根据高度着色）
-                const heightColor = (z + 2) / 4; // 假设高度范围 -2 到 2
+                // 默认颜色（根据高度着色，Y轴为高度）
+                const heightColor = (y + 2) / 4; // 假设高度范围 -2 到 2
                 colors.push(heightColor, 1 - heightColor, 0.5);
             }
         }

@@ -84,6 +84,8 @@ class ROISelector {
 
         // 附加到变换控制器（默认平移模式）
         this.transformControls.attach(this.roiBox);
+        // 设置为局部坐标系模式，使控制轴跟随物体旋转
+        this.transformControls.setSpace('local');
 
         this.isActive = true;
         console.log('ROI 裁剪框已创建');
@@ -235,6 +237,8 @@ class ROISelector {
             if (this.transformControls && this.roiBox) {
                 this.transformControls.attach(this.roiBox);
                 this.transformControls.setMode(mode);
+                // 设置为局部坐标系模式，使控制轴跟随物体旋转
+                this.transformControls.setSpace('local');
             }
         }
     }

@@ -36,7 +36,11 @@ contact_webUI/
 
 ```bash
 # Start all services (rosbridge + PCD publisher + web server)
-./start_all.sh
+./start_all.sh        # General startup
+./start_all_ros1.sh   # ROS 1 specific with detailed logging
+
+# Start point cloud processor (for real sensor data)
+./start_processor.sh
 
 # Stop all services
 ./stop.sh
@@ -126,6 +130,30 @@ ros2 node list | grep rosbridge
 - Integrates with Three.js TransformControls for translate/rotate/scale
 - Provides box pose (position + quaternion) for ROS publishing
 
+### Point Cloud Processor (src/pointcloud_processor.py)
+
+Backend ROS node for point cloud preprocessing:
+- Subscribes to `/cloud_registered` (raw input point cloud)
+- Publishes processed point cloud to `/cloud_in`
+- Performs automatic downsampling when point count exceeds threshold
+- Supports ROI cropping based on Web UI commands
+- Handles crop box pose, size, and reset signals
+
+**Start the processor:**
+```bash
+./start_processor.sh
+# OR
+roslaunch contact_webui pointcloud_processor.launch
+```
+
+**Configurable parameters:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `input_topic` | `/cloud_registered` | Input point cloud topic |
+| `output_topic` | `/cloud_in` | Output point cloud topic |
+| `max_points` | `500000` | Max points before downsampling |
+| `publish_rate` | `5.0` | Publishing frequency (Hz) |
+
 ### ROS Communication Layer
 
 **rosbridge_suite** provides WebSocket bridge:
@@ -134,13 +162,16 @@ ros2 node list | grep rosbridge
 - Message types automatically converted between ROS 1/2
 - Frontend uses roslib.js to communicate with rosbridge
 
-**Subscribed Topics:**
+**Subscribed Topics (Web UI):**
 - `/cloud_in` - sensor_msgs/PointCloud2 (global point cloud)
 - `/mavros/local_position/pose` - geometry_msgs/PoseStamped (drone pose)
 
-**Published Topics:**
+**Published Topics (Web UI):**
 - `/planning/roi_box` - geometry_msgs/PoseStamped (ROI bounding box pose)
 - `/planning/goal_points` - geometry_msgs/PoseArray (start and end points)
+- `/planning/crop_box` - geometry_msgs/PoseStamped (crop box pose for backend processor)
+- `/planning/crop_box_size` - geometry_msgs/Vector3 (crop box dimensions)
+- `/planning/crop_reset` - std_msgs/Bool (reset crop to full point cloud)
 
 ### Key Differences Between ROS 1 and ROS 2 Versions
 
@@ -231,7 +262,6 @@ this.updateInterval = 100;    // Update frequency (ms)
 
 ## Important Notes
 
-- This is NOT a git repository (no version control configured)
 - Frontend files are duplicated between ROS 1 and ROS 2 versions - keep them synchronized
 - The web UI must be served via HTTP server (not file://) for WebSocket to work
 - Browser must support WebGL for Three.js rendering

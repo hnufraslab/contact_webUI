@@ -168,12 +168,6 @@ class ROSPointCloudApp {
         const viewport = document.getElementById('viewport');
         const canvas = document.getElementById('canvas3d');
 
-        // 检测WebGL支持
-        if (!this.checkWebGLSupport()) {
-            this.log('您的设备不支持WebGL，无法显示3D内容', 'error');
-            return;
-        }
-
         // 创建场景
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x0a0a0a);
@@ -188,40 +182,23 @@ class ROSPointCloudApp {
         this.camera.position.set(5, 5, 5);
         this.camera.lookAt(0, 0, 0);
 
-        // 创建渲染器 - 针对移动设备优化
-        const rendererOptions = {
-            canvas: canvas,
-            antialias: !this.isMobile, // 移动设备禁用抗锯齿
-            powerPreference: this.isMobile ? 'low-power' : 'high-performance',
-            precision: this.isMobile ? 'mediump' : 'highp',
-            alpha: false,
-            stencil: false,
-            depth: true
-        };
-
+        // 创建渲染器 - 简化配置以提高兼容性
         try {
-            this.renderer = new THREE.WebGLRenderer(rendererOptions);
-        } catch (e) {
-            // 如果创建失败，尝试使用更保守的设置
-            this.log('使用备用渲染器设置...', 'warning');
             this.renderer = new THREE.WebGLRenderer({
                 canvas: canvas,
-                antialias: false,
-                powerPreference: 'low-power',
-                precision: 'lowp'
+                antialias: !this.isMobile
             });
+        } catch (e) {
+            console.error('WebGL初始化失败:', e);
+            this.log('WebGL初始化失败，请检查浏览器设置', 'error');
+            return;
         }
 
         this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
 
-        // 限制像素比以提高移动设备性能
-        const maxPixelRatio = this.isMobile ? 1.5 : 2;
-        const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+        // 限制像素比
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
         this.renderer.setPixelRatio(pixelRatio);
-
-        if (this.isMobile) {
-            this.log(`移动设备模式: 像素比=${pixelRatio.toFixed(1)}, 抗锯齿=关闭`, 'info');
-        }
 
         // 添加光源
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -244,13 +221,6 @@ class ROSPointCloudApp {
         this.orbitControls.enableDamping = true;
         this.orbitControls.dampingFactor = 0.05;
 
-        // 移动设备触摸优化
-        if (this.isMobile) {
-            this.orbitControls.rotateSpeed = 0.5;
-            this.orbitControls.zoomSpeed = 0.8;
-            this.orbitControls.panSpeed = 0.5;
-        }
-
         // 创建变换控制器
         this.transformControls = new THREE.TransformControls(this.camera, this.renderer.domElement);
         this.transformControls.addEventListener('dragging-changed', (event) => {
@@ -259,12 +229,6 @@ class ROSPointCloudApp {
         this.transformControls.addEventListener('change', () => {
             this.updateROIInfo();
         });
-
-        // 移动设备上增大变换控制器的尺寸
-        if (this.isMobile) {
-            this.transformControls.setSize(1.5);
-        }
-
         this.scene.add(this.transformControls);
 
         // 窗口大小调整
@@ -275,25 +239,6 @@ class ROSPointCloudApp {
         });
 
         this.log('Three.js 场景初始化完成', 'info');
-    }
-
-    /**
-     * 检测WebGL支持
-     */
-    checkWebGLSupport() {
-        try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            if (gl) {
-                // 检查是否能创建基本的WebGL资源
-                const ext = gl.getExtension('WEBGL_lose_context');
-                if (ext) ext.loseContext();
-                return true;
-            }
-        } catch (e) {
-            console.error('WebGL检测失败:', e);
-        }
-        return false;
     }
 
     /**

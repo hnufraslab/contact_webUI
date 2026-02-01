@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PointCloud2 Subscribe Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+</head>
+<body>
+    <h1>PointCloud2 Subscribe Test</h1>
+    <button onclick="connect()">Connect & Subscribe</button>
+    <div id="log" style="margin-top:20px; padding:10px; background:#f0f0f0; white-space:pre-wrap; font-family:monospace; max-height:500px; overflow:auto;"></div>
+
+    <script>
+        function log(msg) {
+            document.getElementById('log').innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '\n';
+            console.log(msg);
+        }
+
+        function connect() {
+            log('Connecting to ws://localhost:9090...');
+
+            var ros = new ROSLIB.Ros({ url: 'ws://localhost:9090' });
+
+            ros.on('connection', function() {
+                log('Connected!');
+
+                // 订阅点云
+                var cloudTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cloud_in',
+                    messageType: 'sensor_msgs/msg/PointCloud2'
+                });
+
+                log('Subscribing to /cloud_in...');
+
+                cloudTopic.subscribe(function(message) {
+                    log('=== Received PointCloud2 ===');
+                    log('  header.frame_id: ' + message.header.frame_id);
+                    log('  width: ' + message.width);
+                    log('  height: ' + message.height);
+                    log('  point_step: ' + message.point_step);
+                    log('  fields count: ' + message.fields.length);
+                    log('  data type: ' + typeof message.data);
+                    log('  data length: ' + (message.data ? message.data.length : 'null'));
+
+                    if (message.fields) {
+                        message.fields.forEach(function(f) {
+                            log('    field: ' + f.name + ', offset: ' + f.offset + ', datatype: ' + f.datatype);
+                        });
+                    }
+
+                    // 尝试解码前几个点
+                    if (typeof message.data === 'string' && message.data.length > 0) {
+                        log('  Data is base64 string, decoding...');
+                        try {
+                            var binaryString = atob(message.data);
+                            log('  Decoded binary length: ' + binaryString.length);
+
+                            // 读取前3个点
+                            var bytes = new Uint8Array(binaryString.length);
+                            for (var i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+
+                            var view = new DataView(bytes.buffer);
+                            for (var p = 0; p < 3 && p * message.point_step < bytes.length; p++) {
+                                var offset = p * message.point_step;
+                                var x = view.getFloat32(offset, true);
+                                var y = view.getFloat32(offset + 4, true);
+                                var z = view.getFloat32(offset + 8, true);
+                                log('  Point ' + p + ': x=' + x.toFixed(2) + ', y=' + y.toFixed(2) + ', z=' + z.toFixed(2));
+                            }
+                        } catch(e) {
+                            log('  Decode error: ' + e.message);
+                        }
+                    }
+
+                    // 只接收一次
+                    cloudTopic.unsubscribe();
+                    log('Unsubscribed after first message');
+                });
+            });
+
+            ros.on('error', function(error) {
+                log('Error: ' + error);
+            });
+
+            ros.on('close', function() {
+                log('Connection closed');
+            });
+        }
+
+        log('Page loaded. Click button to test.');
+    </script>
+</body>
+</html>

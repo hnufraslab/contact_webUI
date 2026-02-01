@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+</head>
+<body>
+    <h1>ROS WebSocket Connection Test</h1>
+    <p>URL: <input type="text" id="url" value="ws://localhost:9090" style="width:300px"></p>
+    <button onclick="testConnection()">Test Connection</button>
+    <button onclick="testNativeWS()">Test Native WebSocket</button>
+    <div id="log" style="margin-top:20px; padding:10px; background:#f0f0f0; white-space:pre-wrap; font-family:monospace;"></div>
+
+    <script>
+        function log(msg) {
+            document.getElementById('log').innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '\n';
+            console.log(msg);
+        }
+
+        function testNativeWS() {
+            var url = document.getElementById('url').value;
+            log('Testing native WebSocket to ' + url);
+
+            try {
+                var ws = new WebSocket(url);
+
+                ws.onopen = function() {
+                    log('Native WebSocket CONNECTED!');
+                    ws.close();
+                };
+
+                ws.onerror = function(e) {
+                    log('Native WebSocket ERROR: ' + JSON.stringify(e));
+                };
+
+                ws.onclose = function(e) {
+                    log('Native WebSocket CLOSED: code=' + e.code + ', reason=' + e.reason);
+                };
+            } catch(e) {
+                log('Native WebSocket EXCEPTION: ' + e.message);
+            }
+        }
+
+        function testConnection() {
+            var url = document.getElementById('url').value;
+            log('Testing ROSLIB connection to ' + url);
+
+            try {
+                var ros = new ROSLIB.Ros({
+                    url: url
+                });
+
+                ros.on('connection', function() {
+                    log('ROSLIB CONNECTED!');
+
+                    // Try to list topics
+                    ros.getTopics(function(result) {
+                        log('Topics: ' + JSON.stringify(result.topics));
+                    }, function(error) {
+                        log('getTopics error: ' + error);
+                    });
+                });
+
+                ros.on('error', function(error) {
+                    log('ROSLIB ERROR: ' + error);
+                });
+
+                ros.on('close', function() {
+                    log('ROSLIB CLOSED');
+                });
+            } catch(e) {
+                log('ROSLIB EXCEPTION: ' + e.message);
+            }
+        }
+
+        log('Page loaded. Click a button to test.');
+    </script>
+</body>
+</html>

@@ -1,0 +1,539 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
+
+#container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* 侧边栏样式 */
+#sidebar {
+    width: 350px;
+    background: #2d2d2d;
+    overflow-y: auto;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+}
+
+.panel {
+    padding: 20px;
+}
+
+.panel h2 {
+    color: #4CAF50;
+    margin-bottom: 20px;
+    font-size: 20px;
+    border-bottom: 2px solid #4CAF50;
+    padding-bottom: 10px;
+}
+
+.section {
+    margin-bottom: 25px;
+    padding: 15px;
+    background: #383838;
+    border-radius: 8px;
+    border-left: 3px solid #4CAF50;
+}
+
+.section h3 {
+    color: #81C784;
+    margin-bottom: 15px;
+    font-size: 16px;
+}
+
+/* 输入组样式 */
+.input-group {
+    margin-bottom: 12px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #b0b0b0;
+    font-size: 13px;
+}
+
+.input-group input[type="text"],
+.input-group select {
+    width: 100%;
+    padding: 8px;
+    background: #4a4a4a;
+    border: 1px solid #5a5a5a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+}
+
+.input-group input[type="text"]:focus,
+.input-group select:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+.input-group input[type="range"] {
+    width: calc(100% - 40px);
+    margin-right: 10px;
+}
+
+/* 复选框样式 */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    margin-right: 8px;
+    width: 16px;
+    height: 16px;
+}
+
+.checkbox-group label {
+    color: #b0b0b0;
+    font-size: 13px;
+}
+
+/* 按钮样式 */
+.btn {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-primary {
+    background: #2196F3;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #1976D2;
+}
+
+.btn-success {
+    background: #4CAF50;
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: #388E3C;
+}
+
+.btn-danger {
+    background: #f44336;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #d32f2f;
+}
+
+.btn-info {
+    background: #00BCD4;
+    color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+    background: #0097A7;
+}
+
+.btn-execute {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 16px;
+    padding: 12px;
+}
+
+.btn-execute:hover:not(:disabled) {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.btn-secondary {
+    background: #757575;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #616161;
+}
+
+/* 状态指示器 */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+    background: #4CAF50;
+}
+
+.status-dot.disconnected {
+    background: #f44336;
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* 信息框样式 */
+.info-box {
+    background: #4a4a4a;
+    padding: 12px;
+    border-radius: 5px;
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+.info-box h4 {
+    color: #81C784;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.param-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid #5a5a5a;
+}
+
+.param-row:last-child {
+    border-bottom: none;
+}
+
+.param-row span:first-child {
+    color: #b0b0b0;
+    font-weight: 600;
+}
+
+.param-row span:last-child {
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+}
+
+/* 日志框样式 */
+.log-box {
+    background: #1a1a1a;
+    padding: 10px;
+    border-radius: 5px;
+    height: 150px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    border: 1px solid #5a5a5a;
+}
+
+.log-entry {
+    margin-bottom: 5px;
+    padding: 3px 5px;
+    border-radius: 3px;
+}
+
+.log-entry.info {
+    color: #81C784;
+}
+
+.log-entry.warning {
+    color: #FFB74D;
+}
+
+.log-entry.error {
+    color: #E57373;
+}
+
+.log-entry.success {
+    color: #4DD0E1;
+}
+
+/* 3D 视口样式 */
+#viewport {
+    flex: 1;
+    position: relative;
+    background: #0a0a0a;
+}
+
+#canvas3d {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* 覆盖文本样式 */
+.overlay-text {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 13px;
+    line-height: 1.6;
+    backdrop-filter: blur(5px);
+}
+
+.overlay-text p {
+    margin-bottom: 5px;
+}
+
+.overlay-text p:last-child {
+    margin-bottom: 0;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #5a5a5a;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6a6a6a;
+}
+
+/* 移动端菜单切换按钮 */
+#mobile-menu-toggle {
+    display: none;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 200;
+    width: 50px;
+    height: 50px;
+    background: #4CAF50;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+#mobile-menu-toggle:active {
+    background: #388E3C;
+}
+
+/* 响应式设计 - 平板 */
+@media (max-width: 1024px) {
+    #sidebar {
+        width: 300px;
+    }
+
+    .panel {
+        padding: 15px;
+    }
+
+    .section {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+}
+
+/* 响应式设计 - 手机/遥控器 */
+@media (max-width: 768px) {
+    #mobile-menu-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #container {
+        flex-direction: column-reverse;
+    }
+
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        z-index: 150;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
+    }
+
+    #sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    #viewport {
+        width: 100%;
+        height: 100vh;
+    }
+
+    .panel {
+        padding: 15px;
+        padding-top: 70px; /* 为关闭按钮留空间 */
+    }
+
+    .panel h2 {
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+
+    .section {
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .section h3 {
+        font-size: 15px;
+        margin-bottom: 10px;
+    }
+
+    /* 增大触摸目标 */
+    .btn {
+        padding: 14px;
+        font-size: 15px;
+        margin-bottom: 10px;
+        min-height: 48px;
+    }
+
+    .input-group input[type="text"],
+    .input-group select {
+        padding: 12px;
+        font-size: 15px;
+        min-height: 48px;
+    }
+
+    .input-group label {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .checkbox-group {
+        padding: 8px 0;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+        margin-right: 12px;
+    }
+
+    .checkbox-group label {
+        font-size: 14px;
+    }
+
+    /* 状态指示器 */
+    .status-indicator {
+        padding: 12px;
+    }
+
+    .status-dot {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* 信息框 */
+    .info-box {
+        padding: 10px;
+        font-size: 13px;
+    }
+
+    .param-row {
+        padding: 6px 0;
+        flex-wrap: wrap;
+    }
+
+    .param-row span:last-child {
+        font-size: 12px;
+        word-break: break-all;
+    }
+
+    /* 日志框 */
+    .log-box {
+        height: 120px;
+        font-size: 12px;
+    }
+
+    /* 覆盖文本 */
+    .overlay-text {
+        top: 70px;
+        right: 10px;
+        left: 10px;
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    /* 隐藏桌面端的操作提示 */
+    #instructions {
+        display: none;
+    }
+
+    /* 移动端关闭按钮 */
+    #mobile-close-btn {
+        display: block;
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 40px;
+        height: 40px;
+        background: #f44336;
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        z-index: 160;
+    }
+}
+
+/* 桌面端隐藏移动端关闭按钮 */
+#mobile-close-btn {
+    display: none;
+}

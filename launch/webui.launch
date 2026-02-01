@@ -1,0 +1,18 @@
+<launch>
+    <!-- ROS Bridge WebSocket 服务器 -->
+    <node name="rosbridge_websocket" pkg="rosbridge_server" type="rosbridge_websocket" output="screen">
+        <param name="port" value="9090"/>
+        <param name="address" value=""/>
+        <param name="retry_startup_delay" value="5"/>
+        <param name="fragment_timeout" value="600"/>
+        <param name="delay_between_messages" value="0"/>
+        <param name="max_message_size" value="10000000"/>
+    </node>
+
+    <!-- 可选：启动 rosapi 节点以提供 ROS 服务 -->
+    <node name="rosapi" pkg="rosapi" type="rosapi_node" output="screen"/>
+
+    <!-- 可选：启动 tf2_web_republisher 用于 TF 转换 -->
+    <!-- <node name="tf2_web_republisher" pkg="tf2_web_republisher" type="tf2_web_republisher" output="screen"/> -->
+
+</launch>

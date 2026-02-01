@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS 点云裁剪与目标下发工具</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Three.js 库 (使用兼容版本) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+
+    <!-- ROS 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+
+    <!-- EventEmitter3 用于事件处理 -->
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter3@4.0.7/dist/eventemitter3.min.js"></script>
+</head>
+<body>
+    <!-- 移动端菜单按钮 -->
+    <button id="mobile-menu-toggle">☰</button>
+
+    <div id="container">
+        <!-- 侧边栏控制面板 -->
+        <div id="sidebar">
+            <!-- 移动端关闭按钮 -->
+            <button id="mobile-close-btn">✕</button>
+            <div class="panel">
+                <h2>无人机接触作业工具</h2>
+
+                <!-- 连接状态 -->
+                <div class="section">
+                    <h3>连接状态</h3>
+                    <div class="status-indicator">
+                        <span id="connection-status" class="status-dot disconnected"></span>
+                        <span id="connection-text">未连接</span>
+                    </div>
+                    <div class="input-group">
+                        <label>ROS Bridge URL:</label>
+                        <input type="text" id="ros-url" value="ws://localhost:9090" />
+                        <button id="connect-btn" class="btn btn-primary">连接</button>
+                    </div>
+                </div>
+
+                <!-- 点云设置 -->
+                <div class="section">
+                    <h3>点云设置</h3>
+                    <div class="input-group">
+                        <label>点云 Topic:</label>
+                        <input type="text" id="pointcloud-topic" value="/cloud_in" />
+                    </div>
+                    <div class="input-group">
+                        <label>无人机位姿 Topic:</label>
+                        <input type="text" id="pose-topic" value="/mavros/local_position/pose" />
+                    </div>
+                    <div class="input-group">
+                        <label>点云大小:</label>
+                        <input type="range" id="point-size" min="0.01" max="1" value="0.05" step="0.01" />
+                        <span id="point-size-value">0.05</span>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="show-drone" checked />
+                        <label for="show-drone">显示无人机</label>
+                    </div>
+                </div>
+
+                <!-- ROI 裁剪框 -->
+                <div class="section">
+                    <h3>ROI 裁剪框</h3>
+                    <button id="create-roi-btn" class="btn btn-success">创建裁剪框</button>
+                    <button id="delete-roi-btn" class="btn btn-danger" disabled>删除裁剪框</button>
+
+                    <div id="roi-info" class="info-box" style="display: none;">
+                        <h4>裁剪框参数</h4>
+                        <div class="param-row">
+                            <span>中心:</span>
+                            <span id="roi-center">-</span>
+                        </div>
+                        <div class="param-row">
+                            <span>尺寸:</span>
+                            <span id="roi-size">-</span>
+                        </div>
+                        <div class="param-row">
+                            <span>旋转:</span>
+                            <span id="roi-rotation">-</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>变换模式:</label>
+                        <select id="transform-mode">
+                            <option value="translate">平移</option>
+                            <option value="rotate">旋转</option>
+                            <option value="scale">缩放</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-top: 10px;">
+                        <button id="send-crop-btn" class="btn btn-info" disabled>发送裁剪框到上位机</button>
+                        <button id="reset-crop-btn" class="btn btn-secondary" disabled>重置裁剪</button>
+                    </div>
+                    <div id="crop-status" class="info-box" style="display: none; margin-top: 10px;">
+                        <div class="param-row">
+                            <span>裁剪状态:</span>
+                            <span id="crop-status-text">未裁剪</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 目标点选择 -->
+                <div class="section">
+                    <h3>目标点选择</h3>
+                    <button id="set-start-btn" class="btn btn-info">设置起始点</button>
+                    <button id="set-end-btn" class="btn btn-info">设置末端点</button>
+
+                    <div class="info-box">
+                        <div class="param-row">
+                            <span>起始点:</span>
+                            <span id="start-point-info">未设置</span>
+                        </div>
+                        <div class="param-row">
+                            <span>末端点:</span>
+                            <span id="end-point-info">未设置</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行控制 -->
+                <div class="section">
+                    <h3>执行控制</h3>
+                    <button id="execute-btn" class="btn btn-execute" disabled>确认执行</button>
+                    <button id="reset-btn" class="btn btn-secondary">重置所有</button>
+                </div>
+
+                <!-- 日志信息 -->
+                <div class="section">
+                    <h3>日志</h3>
+                    <div id="log-container" class="log-box"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3D 渲染区域 -->
+        <div id="viewport">
+            <canvas id="canvas3d"></canvas>
+            <div id="instructions" class="overlay-text">
+                <p>🖱️ 左键拖拽：旋转视角</p>
+                <p>🖱️ 右键拖拽：平移视角</p>
+                <p>🖱️ 滚轮：缩放视角</p>
+                <p>📦 创建裁剪框后可拖拽调整</p>
+            </div>
+            <div id="picking-mode" class="overlay-text" style="display: none; background: rgba(255, 165, 0, 0.9);">
+                <p>🎯 点选模式激活</p>
+                <p>点击点云表面选择目标点</p>
+                <p>按 ESC 取消</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载主脚本 -->
+    <script src="js/pointcloud.js"></script>
+    <script src="js/roi_selector.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -115,6 +115,12 @@ class ROSPointCloudApp {
         this.connectionStatus = document.getElementById('connection-status');
         this.connectionText = document.getElementById('connection-text');
 
+        // 设置默认 ROS URL 为当前服务器地址
+        if (this.rosUrlInput && !this.rosUrlInput.value) {
+            const hostname = window.location.hostname || 'localhost';
+            this.rosUrlInput.value = `ws://${hostname}:9090`;
+        }
+
         // 点云设置
         this.pointcloudTopicInput = document.getElementById('pointcloud-topic');
         this.poseTopicInput = document.getElementById('pose-topic');
@@ -149,6 +155,9 @@ class ROSPointCloudApp {
 
         // 覆盖层
         this.pickingModeOverlay = document.getElementById('picking-mode');
+
+        // 全屏按钮
+        this.fullscreenBtn = document.getElementById('fullscreen-btn');
     }
 
     /**
@@ -159,6 +168,11 @@ class ROSPointCloudApp {
         this.initEventListeners();
         this.animate();
         this.log('应用初始化完成', 'info');
+
+        // 页面加载后自动连接
+        setTimeout(() => {
+            this.connect();
+        }, 500);
     }
 
     /**
@@ -253,6 +267,21 @@ class ROSPointCloudApp {
                 this.connect();
             }
         });
+
+        // 全屏按钮
+        if (this.fullscreenBtn) {
+            this.fullscreenBtn.addEventListener('click', () => {
+                this.toggleFullscreen();
+            });
+
+            // 监听全屏状态变化
+            document.addEventListener('fullscreenchange', () => {
+                this.updateFullscreenButton();
+            });
+            document.addEventListener('webkitfullscreenchange', () => {
+                this.updateFullscreenButton();
+            });
+        }
 
         // 点云大小滑块
         this.pointSizeSlider.addEventListener('input', (e) => {
@@ -621,7 +650,28 @@ class ROSPointCloudApp {
         }
 
         this.pickingMode = mode;
-        this.pickingModeOverlay.style.display = 'block';
+
+        // 显示提示并设置自动消失
+        const overlay = this.pickingModeOverlay;
+        overlay.style.display = 'block';
+        overlay.style.opacity = '0.85';
+
+        // 清除之前的定时器
+        if (this.pickingOverlayTimer) {
+            clearTimeout(this.pickingOverlayTimer);
+        }
+
+        // 3秒后淡出消失
+        this.pickingOverlayTimer = setTimeout(() => {
+            overlay.style.transition = 'opacity 0.5s ease';
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                if (this.pickingMode) {
+                    overlay.style.display = 'none';
+                }
+            }, 500);
+        }, 3000);
+
         this.orbitControls.enabled = false;
         this.renderer.domElement.style.cursor = 'crosshair';
 
@@ -634,7 +684,17 @@ class ROSPointCloudApp {
      */
     exitPickingMode() {
         this.pickingMode = null;
+
+        // 清除定时器
+        if (this.pickingOverlayTimer) {
+            clearTimeout(this.pickingOverlayTimer);
+            this.pickingOverlayTimer = null;
+        }
+
         this.pickingModeOverlay.style.display = 'none';
+        this.pickingModeOverlay.style.opacity = '0.85';
+        this.pickingModeOverlay.style.transition = '';
+
         this.orbitControls.enabled = true;
         this.renderer.domElement.style.cursor = 'default';
         this.log('已退出点选模式', 'info');
@@ -936,6 +996,11 @@ class ROSPointCloudApp {
         this.cropStatusText.style.color = '#4CAF50';
         this.resetCropBtn.disabled = false;
 
+        // 强制刷新点云以获取裁剪后的数据
+        if (this.pointCloudManager) {
+            this.pointCloudManager.forceRefresh();
+        }
+
         this.log(`裁剪框已发送: 中心(${roiParams.center.x.toFixed(2)}, ${roiParams.center.y.toFixed(2)}, ${roiParams.center.z.toFixed(2)}), 尺寸(${roiParams.size.x.toFixed(2)}, ${roiParams.size.y.toFixed(2)}, ${roiParams.size.z.toFixed(2)})`, 'success');
     }
 
@@ -959,6 +1024,11 @@ class ROSPointCloudApp {
         this.cropStatusText.textContent = '已重置裁剪';
         this.cropStatusText.style.color = '#FFB74D';
         this.resetCropBtn.disabled = true;
+
+        // 强制刷新点云以获取重置后的数据
+        if (this.pointCloudManager) {
+            this.pointCloudManager.forceRefresh();
+        }
 
         this.log('已发送裁剪重置命令', 'info');
     }
@@ -1001,6 +1071,11 @@ class ROSPointCloudApp {
         // 更新控制器
         this.orbitControls.update();
 
+        // 更新缩放控制点位置（如果在缩放模式下）
+        if (this.roiSelector && this.roiSelector.isScaleMode) {
+            this.roiSelector.updateScaleHandlePositions();
+        }
+
         // 渲染场景
         this.renderer.render(this.scene, this.camera);
     }
@@ -1020,6 +1095,55 @@ class ROSPointCloudApp {
         // 限制日志条目数量
         while (this.logContainer.children.length > 100) {
             this.logContainer.removeChild(this.logContainer.firstChild);
+        }
+    }
+
+    /**
+     * 切换全屏模式
+     */
+    toggleFullscreen() {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            // 进入全屏
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            }
+            this.log('进入全屏模式', 'info');
+        } else {
+            // 退出全屏
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+            this.log('退出全屏模式', 'info');
+        }
+    }
+
+    /**
+     * 更新全屏按钮图标
+     */
+    updateFullscreenButton() {
+        if (this.fullscreenBtn) {
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                this.fullscreenBtn.textContent = '⛶';
+                this.fullscreenBtn.title = '退出全屏';
+            } else {
+                this.fullscreenBtn.textContent = '⛶';
+                this.fullscreenBtn.title = '全屏显示';
+            }
+
+            // 触发窗口大小调整以更新渲染器
+            setTimeout(() => {
+                const viewport = document.getElementById('viewport');
+                if (this.camera && this.renderer && viewport) {
+                    this.camera.aspect = viewport.clientWidth / viewport.clientHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+                }
+            }, 100);
         }
     }
 }

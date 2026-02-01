@@ -22,15 +22,15 @@ class PointCloudManager {
         // 安卓9及以下设备使用更低的限制
         if (this.isAndroid && this.androidVersion <= 9) {
             this.maxPoints = 50000; // 安卓9设备限制为5万点
-            this.updateInterval = 200; // 更长的更新间隔
+            this.updateInterval = 100; // 降低更新间隔以确保能收到裁剪后的点云
             console.log('检测到安卓9设备，使用低性能模式');
         } else if (this.isMobile) {
             this.maxPoints = 100000; // 其他移动设备限制为10万点
-            this.updateInterval = 150;
+            this.updateInterval = 80;
             console.log('检测到移动设备，使用移动端优化模式');
         } else {
             this.maxPoints = 500000; // 桌面设备50万点
-            this.updateInterval = 100;
+            this.updateInterval = 50;
         }
 
         this.pointSize = 0.05; // 默认点大小
@@ -75,7 +75,7 @@ class PointCloudManager {
             ros: this.ros,
             name: topicName,
             messageType: 'sensor_msgs/PointCloud2',
-            throttle_rate: 200 // 限制更新频率
+            throttle_rate: 100 // 降低节流以确保移动端能收到更新
         });
 
         this.pointCloudSubscriber.subscribe((message) => {
@@ -83,6 +83,51 @@ class PointCloudManager {
         });
 
         console.log(`已订阅点云 Topic: ${topicName}`);
+    }
+
+    /**
+     * 强制刷新点云（清除缓存并重新订阅）
+     */
+    forceRefresh() {
+        console.log('强制刷新点云...');
+
+        // 重置更新时间，确保下一条消息能被处理
+        this.lastUpdateTime = 0;
+
+        // 清除当前点云显示
+        if (this.pointsMesh && this.pointsGeometry) {
+            // 清空几何体数据
+            this.pointsGeometry.setAttribute(
+                'position',
+                new THREE.Float32BufferAttribute([], 3)
+            );
+            this.pointsGeometry.setAttribute(
+                'color',
+                new THREE.Float32BufferAttribute([], 3)
+            );
+            this.pointsGeometry.computeBoundingSphere();
+        }
+
+        // 清除缓存数据
+        this.pointsData = {
+            positions: [],
+            colors: []
+        };
+
+        // 重新订阅以获取最新数据
+        if (this.pointCloudTopic) {
+            const topic = this.pointCloudTopic;
+            if (this.pointCloudSubscriber) {
+                this.pointCloudSubscriber.unsubscribe();
+                this.pointCloudSubscriber = null;
+            }
+
+            // 短暂延迟后重新订阅
+            setTimeout(() => {
+                this.subscribe(topic);
+                console.log('点云已重新订阅');
+            }, 100);
+        }
     }
 
     /**

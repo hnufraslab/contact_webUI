@@ -38,7 +38,7 @@
                     </div>
                     <div class="input-group">
                         <label>ROS Bridge URL:</label>
-                        <input type="text" id="ros-url" value="ws://localhost:9090" />
+                        <input type="text" id="ros-url" value="" />
                         <button id="connect-btn" class="btn btn-primary">连接</button>
                     </div>
                 </div>
@@ -144,6 +144,8 @@
         <!-- 3D 渲染区域 -->
         <div id="viewport">
             <canvas id="canvas3d"></canvas>
+            <!-- 全屏按钮 -->
+            <button id="fullscreen-btn" title="全屏显示">⛶</button>
             <div id="instructions" class="overlay-text">
                 <p>🖱️ 左键拖拽：旋转视角</p>
                 <p>🖱️ 右键拖拽：平移视角</p>

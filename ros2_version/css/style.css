@@ -537,3 +537,66 @@ body {
 #mobile-close-btn {
     display: none;
 }
+
+/* 选点模式提示 - 放在右下角，更小更不遮挡 */
+#picking-mode {
+    top: auto !important;
+    bottom: 20px;
+    right: 20px;
+    left: auto !important;
+    padding: 10px 15px;
+    font-size: 12px;
+    background: rgba(255, 165, 0, 0.7) !important;
+    max-width: 200px;
+}
+
+#picking-mode p {
+    margin: 3px 0;
+}
+
+@media (max-width: 768px) {
+    #picking-mode {
+        bottom: 10px;
+        right: 10px;
+        left: auto !important;
+        padding: 8px 12px;
+        font-size: 11px;
+        max-width: 160px;
+    }
+}
+
+/* 全屏按钮 */
+#fullscreen-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    background: rgba(76, 175, 80, 0.4);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s ease;
+}
+
+#fullscreen-btn:hover {
+    background: rgba(76, 175, 80, 0.7);
+}
+
+#fullscreen-btn:active {
+    background: rgba(56, 142, 60, 0.8);
+}
+
+/* 移动端全屏按钮位置调整 */
+@media (max-width: 768px) {
+    #fullscreen-btn {
+        top: 10px;
+        right: 70px;
+    }
+}

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS连接测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .test-section {
+            background: #2d2d2d;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+        input, button {
+            padding: 12px;
+            font-size: 16px;
+            margin: 5px 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:active {
+            background: #388E3C;
+        }
+        .log {
+            background: #1a1a1a;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #666;
+        }
+        .log-entry.success { border-color: #4CAF50; color: #81C784; }
+        .log-entry.error { border-color: #f44336; color: #E57373; }
+        .log-entry.info { border-color: #2196F3; color: #64B5F6; }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .status.connected { background: #4CAF50; }
+        .status.disconnected { background: #f44336; }
+        .status.testing { background: #FF9800; }
+    </style>
+</head>
+<body>
+    <h1>ROS 连接诊断工具</h1>
+
+    <div class="test-section">
+        <h3>设备信息</h3>
+        <div id="device-info"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>1. WebSocket 基础测试</h3>
+        <button onclick="testWebSocket()">测试 WebSocket 支持</button>
+        <div id="ws-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. ROS Bridge 连接测试</h3>
+        <input type="text" id="ros-url" placeholder="ROS Bridge URL">
+        <button onclick="testROSConnection()">测试连接</button>
+        <div id="ros-status" class="status disconnected">未连接</div>
+    </div>
+
+    <div class="test-section">
+        <h3>日志</h3>
+        <button onclick="clearLog()">清除日志</button>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        // 显示设备信息
+        function showDeviceInfo() {
+            const info = document.getElementById('device-info');
+            info.innerHTML = `
+                <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+                <p><strong>平台:</strong> ${navigator.platform}</p>
+                <p><strong>屏幕:</strong> ${window.innerWidth} x ${window.innerHeight}</p>
+                <p><strong>在线状态:</strong> ${navigator.onLine ? '在线' : '离线'}</p>
+            `;
+        }
+        showDeviceInfo();
+
+        // 设置默认 ROS URL 为当前服务器地址
+        function setDefaultRosUrl() {
+            const rosUrlInput = document.getElementById('ros-url');
+            const hostname = window.location.hostname || 'localhost';
+            rosUrlInput.value = `ws://${hostname}:9090`;
+        }
+        setDefaultRosUrl();
+
+        // 日志函数
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // 测试 WebSocket 支持
+        function testWebSocket() {
+            const result = document.getElementById('ws-result');
+            if ('WebSocket' in window) {
+                result.innerHTML = '<p style="color: #81C784;">✓ WebSocket 支持正常</p>';
+                log('WebSocket 支持检测通过', 'success');
+            } else {
+                result.innerHTML = '<p style="color: #E57373;">✗ 浏览器不支持 WebSocket</p>';
+                log('WebSocket 不支持!', 'error');
+            }
+        }
+
+        // 测试 ROS 连接
+        function testROSConnection() {
+            const url = document.getElementById('ros-url').value;
+            const statusDiv = document.getElementById('ros-status');
+
+            statusDiv.className = 'status testing';
+            statusDiv.textContent = '正在连接...';
+            log(`尝试连接到: ${url}`, 'info');
+
+            // 先测试原生 WebSocket
+            log('步骤1: 测试原生 WebSocket 连接...', 'info');
+
+            try {
+                const ws = new WebSocket(url);
+
+                ws.onopen = function() {
+                    log('原生 WebSocket 连接成功!', 'success');
+                    ws.close();
+
+                    // 然后测试 ROSLIB
+                    log('步骤2: 测试 ROSLIB 连接...', 'info');
+                    testROSLIB(url);
+                };
+
+                ws.onerror = function(e) {
+                    log(`原生 WebSocket 错误: ${JSON.stringify(e)}`, 'error');
+                    statusDiv.className = 'status disconnected';
+                    statusDiv.textContent = 'WebSocket 连接失败';
+                };
+
+                ws.onclose = function(e) {
+                    log(`WebSocket 关闭, code: ${e.code}, reason: ${e.reason}`, 'info');
+                };
+
+                // 超时处理
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        log('连接超时 (5秒)', 'error');
+                        ws.close();
+                        statusDiv.className = 'status disconnected';
+                        statusDiv.textContent = '连接超时';
+                    }
+                }, 5000);
+
+            } catch (e) {
+                log(`创建 WebSocket 异常: ${e.message}`, 'error');
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = '连接异常';
+            }
+        }
+
+        function testROSLIB(url) {
+            const statusDiv = document.getElementById('ros-status');
+
+            try {
+                const ros = new ROSLIB.Ros({ url: url });
+
+                ros.on('connection', function() {
+                    log('ROSLIB 连接成功!', 'success');
+                    statusDiv.className = 'status connected';
+                    statusDiv.textContent = '已连接';
+
+                    // 尝试获取 topic 列表
+                    log('步骤3: 获取 Topic 列表...', 'info');
+                    ros.getTopics(function(result) {
+                        log(`发现 ${result.topics.length} 个 Topics`, 'success');
+                        result.topics.forEach(t => log(`  - ${t}`, 'info'));
+                    }, function(error) {
+                        log(`获取 Topics 失败: ${error}`, 'error');
+                    });
+                });
+
+                ros.on('error', function(error) {
+                    log(`ROSLIB 错误: ${error}`, 'error');
+                    statusDiv.className = 'status disconnected';
+                    statusDiv.textContent = 'ROSLIB 连接失败';
+                });
+
+                ros.on('close', function() {
+                    log('ROSLIB 连接已关闭', 'info');
+                });
+
+            } catch (e) {
+                log(`ROSLIB 异常: ${e.message}`, 'error');
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = 'ROSLIB 异常';
+            }
+        }
+
+        // 页面加载时自动测试 WebSocket
+        testWebSocket();
+        log('诊断工具已加载，请点击按钮进行测试', 'info');
+    </script>
+</body>
+</html>

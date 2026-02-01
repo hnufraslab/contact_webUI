@@ -83,18 +83,18 @@ class ROSPointCloudApp {
         const sidebar = document.getElementById('sidebar');
 
         if (menuToggle && sidebar) {
-            // 同时监听click和touchend事件，确保移动端兼容
-            const openMenu = (e) => {
+            // 点击绿色按钮切换菜单（打开/关闭）
+            const toggleMenu = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                sidebar.classList.add('mobile-open');
+                sidebar.classList.toggle('mobile-open');
             };
-            menuToggle.addEventListener('click', openMenu);
-            menuToggle.addEventListener('touchend', openMenu);
+            menuToggle.addEventListener('click', toggleMenu);
+            menuToggle.addEventListener('touchend', toggleMenu);
         }
 
         if (closeBtn && sidebar) {
-            // 关闭按钮 - 使用touchend确保安卓兼容
+            // 关闭按钮
             const closeMenu = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -102,16 +102,6 @@ class ROSPointCloudApp {
             };
             closeBtn.addEventListener('click', closeMenu);
             closeBtn.addEventListener('touchend', closeMenu);
-        }
-
-        // 点击3D视口时关闭菜单
-        const viewport = document.getElementById('viewport');
-        if (viewport && sidebar) {
-            viewport.addEventListener('click', () => {
-                if (sidebar.classList.contains('mobile-open')) {
-                    sidebar.classList.remove('mobile-open');
-                }
-            });
         }
     }
 

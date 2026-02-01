@@ -83,15 +83,25 @@ class ROSPointCloudApp {
         const sidebar = document.getElementById('sidebar');
 
         if (menuToggle && sidebar) {
-            menuToggle.addEventListener('click', () => {
+            // 同时监听click和touchend事件，确保移动端兼容
+            const openMenu = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 sidebar.classList.add('mobile-open');
-            });
+            };
+            menuToggle.addEventListener('click', openMenu);
+            menuToggle.addEventListener('touchend', openMenu);
         }
 
         if (closeBtn && sidebar) {
-            closeBtn.addEventListener('click', () => {
+            // 关闭按钮 - 使用touchend确保安卓兼容
+            const closeMenu = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 sidebar.classList.remove('mobile-open');
-            });
+            };
+            closeBtn.addEventListener('click', closeMenu);
+            closeBtn.addEventListener('touchend', closeMenu);
         }
 
         // 点击3D视口时关闭菜单

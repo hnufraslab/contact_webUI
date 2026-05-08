@@ -58,6 +58,11 @@ class PlannerServiceStub(object):
                 request_serializer=planner__pb2.PlanTrajectoryRequest.SerializeToString,
                 response_deserializer=planner__pb2.PlanTrajectoryResponse.FromString,
                 _registered_method=True)
+        self.GetSurfacePoint = channel.unary_unary(
+                '/planner_service.PlannerService/GetSurfacePoint',
+                request_serializer=planner__pb2.GetSurfacePointRequest.SerializeToString,
+                response_deserializer=planner__pb2.GetSurfacePointResponse.FromString,
+                _registered_method=True)
 
 
 class PlannerServiceServicer(object):
@@ -95,6 +100,13 @@ class PlannerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSurfacePoint(self, request, context):
+        """Interface 5: Get surface point and normal at UV coordinates
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PlannerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -117,6 +129,11 @@ def add_PlannerServiceServicer_to_server(servicer, server):
                     servicer.PlanTrajectory,
                     request_deserializer=planner__pb2.PlanTrajectoryRequest.FromString,
                     response_serializer=planner__pb2.PlanTrajectoryResponse.SerializeToString,
+            ),
+            'GetSurfacePoint': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSurfacePoint,
+                    request_deserializer=planner__pb2.GetSurfacePointRequest.FromString,
+                    response_serializer=planner__pb2.GetSurfacePointResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -231,6 +248,33 @@ class PlannerService(object):
             '/planner_service.PlannerService/PlanTrajectory',
             planner__pb2.PlanTrajectoryRequest.SerializeToString,
             planner__pb2.PlanTrajectoryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSurfacePoint(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/planner_service.PlannerService/GetSurfacePoint',
+            planner__pb2.GetSurfacePointRequest.SerializeToString,
+            planner__pb2.GetSurfacePointResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -145,6 +145,14 @@
                             <span>状态:</span>
                             <span id="surface-status-text">未拟合</span>
                         </div>
+                        <div class="param-row">
+                            <span>参考法向:</span>
+                            <span id="surface-normal-text">-Z</span>
+                        </div>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="reverse-normal" />
+                        <label for="reverse-normal">反转法向</label>
                     </div>
                     <button id="generate-surface-btn" class="btn btn-success" disabled>生产曲面</button>
                     <button id="clear-surface-btn" class="btn btn-secondary" disabled>取消曲面</button>
@@ -247,6 +255,6 @@
     <!-- 加载主脚本 -->
     <script src="js/pointcloud.js?v=5"></script>
     <script src="js/roi_selector.js?v=5"></script>
-    <script src="js/main.js?v=10"></script>
+    <script src="js/main.js?v=11"></script>
 </body>
 </html>

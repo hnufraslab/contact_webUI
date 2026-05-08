@@ -28,7 +28,9 @@ from std_msgs.msg import Header, Bool, Float64, Float64MultiArray, MultiArrayDim
 from visualization_msgs.msg import Marker, MarkerArray
 
 # 导入 gRPC 生成的代码
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../grpc_planner'))
+SCRIPT_DIR = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(SCRIPT_DIR, '../../grpc_planner'))
+sys.path.insert(0, os.path.join(SCRIPT_DIR, '../scripts'))
 import planner_pb2
 import planner_pb2_grpc
 
@@ -65,6 +67,7 @@ class GrpcPlannerBridge:
         # 状态标志
         self.surface_fitted = False  # 曲面是否已拟合
         self.mesh_generated = False  # 网格是否已生成
+        self.reverse_normal = False  # 是否反转曲面拟合参考法向
 
         # UV 参数缓存
         self.start_uv = [0.2, 0.2]  # [u, v]
@@ -156,6 +159,14 @@ class GrpcPlannerBridge:
             '/planner/plan_trigger',
             Bool,
             self.plan_trigger_callback,
+            queue_size=1
+        )
+
+        # 订阅曲面拟合参考法向反转信号
+        self.reverse_normal_sub = rospy.Subscriber(
+            '/planner/reverse_normal',
+            Bool,
+            self.reverse_normal_callback,
             queue_size=1
         )
 
@@ -346,7 +357,8 @@ class GrpcPlannerBridge:
             flat_points = filtered_points.flatten().tolist()
             request = planner_pb2.UpdatePointCloudRequest(
                 points=flat_points,
-                num_points=len(filtered_points)
+                num_points=len(filtered_points),
+                reverse_normal=self.reverse_normal
             )
 
             response = self.grpc_stub.UpdatePointCloud(request)
@@ -383,6 +395,12 @@ class GrpcPlannerBridge:
             self.grpc_connected = False
         except Exception as e:
             rospy.logerr(f"处理失败: {e}")
+
+    def reverse_normal_callback(self, msg):
+        """曲面拟合参考法向反转回调函数"""
+        self.reverse_normal = bool(msg.data)
+        direction = "+Z" if self.reverse_normal else "-Z"
+        rospy.loginfo(f"曲面拟合参考法向设置为 {direction}")
 
     def publish_mesh(self, triangles):
         """发布网格数据为 MarkerArray"""

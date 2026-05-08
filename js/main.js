@@ -170,6 +170,8 @@ class ROSPointCloudApp {
         this.generateSurfaceBtn = document.getElementById('generate-surface-btn');
         this.clearSurfaceBtn = document.getElementById('clear-surface-btn');
         this.surfaceStatusText = document.getElementById('surface-status-text');
+        this.reverseNormalCheckbox = document.getElementById('reverse-normal');
+        this.surfaceNormalText = document.getElementById('surface-normal-text');
 
         // 日志
         this.logContainer = document.getElementById('log-container');
@@ -390,6 +392,18 @@ class ROSPointCloudApp {
             });
         }
 
+        if (this.reverseNormalCheckbox) {
+            this.reverseNormalCheckbox.addEventListener('change', () => {
+                this.publishReverseNormal();
+                this.updateSurfaceNormalText();
+
+                if (this.surfaceFitted) {
+                    this.log('法向设置已变化，正在重新生产曲面...', 'info');
+                    this.generateSurface();
+                }
+            });
+        }
+
         // 目标点设置按钮
         // UV 滑块事件监听
         this.startUSlider.addEventListener('input', (e) => {
@@ -556,9 +570,17 @@ class ROSPointCloudApp {
             messageType: 'std_msgs/Bool'
         });
 
+        // 曲面拟合参考法向反转发布器
+        this.reverseNormalPublisher = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/reverse_normal',
+            messageType: 'std_msgs/Bool'
+        });
+
         this.log('管理器初始化完成', 'info');
         this.publishCloudDensity();
         this.publishAccumulationFrames();
+        this.publishReverseNormal();
     }
 
     /**
@@ -1366,6 +1388,35 @@ class ROSPointCloudApp {
     }
 
     /**
+     * 发布曲面拟合参考法向设置
+     */
+    publishReverseNormal() {
+        this.updateSurfaceNormalText();
+
+        if (!this.isConnected || !this.reverseNormalPublisher) {
+            return;
+        }
+
+        const message = new ROSLIB.Message({
+            data: this.reverseNormalCheckbox ? this.reverseNormalCheckbox.checked : false
+        });
+
+        this.reverseNormalPublisher.publish(message);
+    }
+
+    /**
+     * 更新参考法向显示
+     */
+    updateSurfaceNormalText() {
+        if (!this.surfaceNormalText) {
+            return;
+        }
+
+        const reversed = this.reverseNormalCheckbox ? this.reverseNormalCheckbox.checked : false;
+        this.surfaceNormalText.textContent = reversed ? '+Z' : '-Z';
+    }
+
+    /**
      * 发布起始点 UV 参数
      */
     publishStartUV() {
@@ -1675,14 +1726,17 @@ class ROSPointCloudApp {
             return;
         }
 
+        this.publishReverseNormal();
         this.log('正在生产曲面...', 'info');
 
-        // 发送触发信号到 gRPC bridge
         const message = new ROSLIB.Message({
             data: true
         });
 
-        this.convertMeshTriggerPublisher.publish(message);
+        // Give rosbridge a short moment to deliver the normal-direction topic first.
+        setTimeout(() => {
+            this.convertMeshTriggerPublisher.publish(message);
+        }, 50);
 
         // 更新 UI 状态
         this.surfaceStatusText.textContent = '正在拟合...';

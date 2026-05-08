@@ -294,7 +294,11 @@ print_success "✓ 位姿转换器: 运行中"
 print_success "✓ Web 界面: http://localhost:8000"
 if [ $DOCKER_STARTED -eq 1 ]; then
     print_success "✓ gRPC Planner Service: localhost:50051"
-    print_success "✓ gRPC Bridge: 运行中"
+    if [ -n "$GRPC_BRIDGE_PID" ] && ps -p $GRPC_BRIDGE_PID > /dev/null; then
+        print_success "✓ gRPC Bridge: 运行中"
+    else
+        print_warning "✗ gRPC Bridge: 未运行，请查看 $LOG_DIR/grpc_bridge_$TIMESTAMP.log"
+    fi
 fi
 echo ""
 print_info "日志文件保存在: $LOG_DIR/"

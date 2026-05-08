@@ -79,7 +79,10 @@ class GrpcPlannerBridge:
 
         # 点云缓存
         self.latest_pointcloud = None
+        self.latest_pointcloud_time = rospy.Time(0)
         self.pointcloud_lock = threading.Lock()
+        self.crop_config_time = rospy.Time(0)
+        self.crop_wait_timeout = rospy.Duration(2.0)
 
         # 创建CSV输出目录
         if self.save_trajectory_csv:
@@ -159,6 +162,28 @@ class GrpcPlannerBridge:
             '/planner/plan_trigger',
             Bool,
             self.plan_trigger_callback,
+            queue_size=1
+        )
+
+        # 监听裁剪参数，用于避免曲面拟合使用裁剪前缓存点云
+        self.crop_box_sub = rospy.Subscriber(
+            '/planning/crop_box',
+            PoseStamped,
+            self.crop_config_callback,
+            queue_size=1
+        )
+
+        self.crop_box_size_sub = rospy.Subscriber(
+            '/planning/crop_box_size',
+            Vector3,
+            self.crop_config_callback,
+            queue_size=1
+        )
+
+        self.crop_reset_sub = rospy.Subscriber(
+            '/planning/crop_reset',
+            Bool,
+            self.crop_reset_callback,
             queue_size=1
         )
 
@@ -281,11 +306,23 @@ class GrpcPlannerBridge:
             # 缓存点云
             with self.pointcloud_lock:
                 self.latest_pointcloud = points
+                self.latest_pointcloud_time = rospy.Time.now()
 
             rospy.loginfo_throttle(5.0, f"点云已缓存: {len(points)} 个点")
 
         except Exception as e:
             rospy.logerr(f"点云处理失败: {e}")
+
+    def crop_config_callback(self, msg):
+        """记录裁剪参数更新时间，保证拟合使用裁剪后的新点云"""
+        self.crop_config_time = rospy.Time.now()
+        rospy.loginfo_throttle(1.0, "收到裁剪参数更新，等待新的裁剪后点云用于曲面拟合")
+
+    def crop_reset_callback(self, msg):
+        """裁剪重置后也等待新的未裁剪点云，避免使用旧缓存"""
+        if msg.data:
+            self.crop_config_time = rospy.Time.now()
+            rospy.loginfo("收到裁剪重置，等待新的点云用于曲面拟合")
 
     def statistical_outlier_filter(self, points, mean_k=10, std_dev_mul_thresh=1.0):
         """使用 PCL 统计离群点滤波
@@ -336,16 +373,39 @@ class GrpcPlannerBridge:
             rospy.logwarn("gRPC 未连接，无法转换网格")
             return
 
+        # 如果刚更新过裁剪框，等待 pointcloud_processor 发布下一帧 /cloud_in。
+        # 否则可能使用裁剪前的 latest_pointcloud 缓存去拟合。
+        wait_start = rospy.Time.now()
+        while not rospy.is_shutdown():
+            with self.pointcloud_lock:
+                has_fresh_cloud = (
+                    self.latest_pointcloud is not None and
+                    self.latest_pointcloud_time >= self.crop_config_time
+                )
+
+            if has_fresh_cloud:
+                break
+
+            if rospy.Time.now() - wait_start > self.crop_wait_timeout:
+                rospy.logwarn(
+                    "等待裁剪后点云超时，将使用当前缓存点云；请确认 /cloud_in 是否仍在发布"
+                )
+                break
+
+            rospy.sleep(0.05)
+
         # 检查是否有缓存的点云
         with self.pointcloud_lock:
             if self.latest_pointcloud is None:
                 rospy.logwarn("没有缓存的点云数据，请先发布点云")
                 return
             points = self.latest_pointcloud.copy()
+            pointcloud_age = (rospy.Time.now() - self.latest_pointcloud_time).to_sec()
 
         try:
             rospy.loginfo("=" * 60)
             rospy.loginfo("开始处理点云并转换网格")
+            rospy.loginfo(f"使用缓存点云: {len(points)} 个点, 缓存年龄: {pointcloud_age:.3f}s")
             rospy.loginfo("=" * 60)
 
             # 1. 离群点滤波

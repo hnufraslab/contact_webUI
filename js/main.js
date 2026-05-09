@@ -171,6 +171,7 @@ class ROSPointCloudApp {
         this.clearSurfaceBtn = document.getElementById('clear-surface-btn');
         this.surfaceStatusText = document.getElementById('surface-status-text');
         this.reverseNormalCheckbox = document.getElementById('reverse-normal');
+        this.normalAxisSelect = document.getElementById('normal-axis');
         this.surfaceNormalText = document.getElementById('surface-normal-text');
 
         // 日志
@@ -394,11 +395,23 @@ class ROSPointCloudApp {
 
         if (this.reverseNormalCheckbox) {
             this.reverseNormalCheckbox.addEventListener('change', () => {
-                this.publishReverseNormal();
+                this.publishNormalSettings();
                 this.updateSurfaceNormalText();
 
                 if (this.surfaceFitted) {
                     this.log('法向设置已变化，正在重新生产曲面...', 'info');
+                    this.generateSurface();
+                }
+            });
+        }
+
+        if (this.normalAxisSelect) {
+            this.normalAxisSelect.addEventListener('change', () => {
+                this.publishNormalSettings();
+                this.updateSurfaceNormalText();
+
+                if (this.surfaceFitted) {
+                    this.log('参考轴向已变化，正在重新生产曲面...', 'info');
                     this.generateSurface();
                 }
             });
@@ -577,10 +590,17 @@ class ROSPointCloudApp {
             messageType: 'std_msgs/Bool'
         });
 
+        // 曲面拟合参考法向轴向发布器
+        this.normalAxisPublisher = new ROSLIB.Topic({
+            ros: this.ros,
+            name: '/planner/reference_normal_axis',
+            messageType: 'std_msgs/Int32'
+        });
+
         this.log('管理器初始化完成', 'info');
         this.publishCloudDensity();
         this.publishAccumulationFrames();
-        this.publishReverseNormal();
+        this.publishNormalSettings();
     }
 
     /**
@@ -1390,18 +1410,26 @@ class ROSPointCloudApp {
     /**
      * 发布曲面拟合参考法向设置
      */
-    publishReverseNormal() {
+    publishNormalSettings() {
         this.updateSurfaceNormalText();
 
-        if (!this.isConnected || !this.reverseNormalPublisher) {
+        if (!this.isConnected) {
             return;
         }
 
-        const message = new ROSLIB.Message({
-            data: this.reverseNormalCheckbox ? this.reverseNormalCheckbox.checked : false
-        });
+        if (this.reverseNormalPublisher) {
+            const reverseMessage = new ROSLIB.Message({
+                data: this.reverseNormalCheckbox ? this.reverseNormalCheckbox.checked : false
+            });
+            this.reverseNormalPublisher.publish(reverseMessage);
+        }
 
-        this.reverseNormalPublisher.publish(message);
+        if (this.normalAxisPublisher) {
+            const axisMessage = new ROSLIB.Message({
+                data: this.normalAxisSelect ? parseInt(this.normalAxisSelect.value) : 0
+            });
+            this.normalAxisPublisher.publish(axisMessage);
+        }
     }
 
     /**
@@ -1413,7 +1441,10 @@ class ROSPointCloudApp {
         }
 
         const reversed = this.reverseNormalCheckbox ? this.reverseNormalCheckbox.checked : false;
-        this.surfaceNormalText.textContent = reversed ? '+Z' : '-Z';
+        const axisNames = ['X', 'Y', 'Z'];
+        const axis = this.normalAxisSelect ? parseInt(this.normalAxisSelect.value) : 0;
+        const axisName = axisNames[axis] || 'X';
+        this.surfaceNormalText.textContent = `${reversed ? '+' : '-'}${axisName}`;
     }
 
     /**
@@ -1726,7 +1757,7 @@ class ROSPointCloudApp {
             return;
         }
 
-        this.publishReverseNormal();
+        this.publishNormalSettings();
         this.log('正在生产曲面...', 'info');
 
         const message = new ROSLIB.Message({

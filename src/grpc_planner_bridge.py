@@ -24,7 +24,7 @@ from collections import deque
 # 导入 ROS 消息类型
 from sensor_msgs.msg import PointCloud2, PointField
 from geometry_msgs.msg import Point, PointStamped, PoseStamped, Vector3
-from std_msgs.msg import Header, Bool, Float64, Float64MultiArray, MultiArrayDimension
+from std_msgs.msg import Header, Bool, Int32, Float64, Float64MultiArray, MultiArrayDimension
 from visualization_msgs.msg import Marker, MarkerArray
 
 # 导入 gRPC 生成的代码
@@ -68,6 +68,7 @@ class GrpcPlannerBridge:
         self.surface_fitted = False  # 曲面是否已拟合
         self.mesh_generated = False  # 网格是否已生成
         self.reverse_normal = False  # 是否反转曲面拟合参考法向
+        self.reference_normal_axis = 0  # 0=X, 1=Y, 2=Z
 
         # UV 参数缓存
         self.start_uv = [0.2, 0.2]  # [u, v]
@@ -82,7 +83,9 @@ class GrpcPlannerBridge:
         self.latest_pointcloud_time = rospy.Time(0)
         self.pointcloud_lock = threading.Lock()
         self.crop_config_time = rospy.Time(0)
-        self.crop_wait_timeout = rospy.Duration(2.0)
+        self.crop_wait_timeout = rospy.Duration(8.0)
+        self.crop_waiting_for_cropped_cloud = False
+        self.pre_crop_point_count = 0
 
         # 创建CSV输出目录
         if self.save_trajectory_csv:
@@ -192,6 +195,14 @@ class GrpcPlannerBridge:
             '/planner/reverse_normal',
             Bool,
             self.reverse_normal_callback,
+            queue_size=1
+        )
+
+        # 订阅曲面拟合参考法向轴向信号
+        self.reference_normal_axis_sub = rospy.Subscriber(
+            '/planner/reference_normal_axis',
+            Int32,
+            self.reference_normal_axis_callback,
             queue_size=1
         )
 
@@ -316,12 +327,17 @@ class GrpcPlannerBridge:
     def crop_config_callback(self, msg):
         """记录裁剪参数更新时间，保证拟合使用裁剪后的新点云"""
         self.crop_config_time = rospy.Time.now()
+        with self.pointcloud_lock:
+            self.pre_crop_point_count = len(self.latest_pointcloud) if self.latest_pointcloud is not None else 0
+        self.crop_waiting_for_cropped_cloud = True
         rospy.loginfo_throttle(1.0, "收到裁剪参数更新，等待新的裁剪后点云用于曲面拟合")
 
     def crop_reset_callback(self, msg):
         """裁剪重置后也等待新的未裁剪点云，避免使用旧缓存"""
         if msg.data:
             self.crop_config_time = rospy.Time.now()
+            self.crop_waiting_for_cropped_cloud = False
+            self.pre_crop_point_count = 0
             rospy.loginfo("收到裁剪重置，等待新的点云用于曲面拟合")
 
     def statistical_outlier_filter(self, points, mean_k=10, std_dev_mul_thresh=1.0):
@@ -373,26 +389,48 @@ class GrpcPlannerBridge:
             rospy.logwarn("gRPC 未连接，无法转换网格")
             return
 
-        # 如果刚更新过裁剪框，等待 pointcloud_processor 发布下一帧 /cloud_in。
-        # 否则可能使用裁剪前的 latest_pointcloud 缓存去拟合。
+        # 如果刚更新过裁剪框，等待 pointcloud_processor 发布裁剪后的 /cloud_in。
+        # 仅按时间判断不够：裁剪参数后的第一帧仍可能是未裁剪的大点云。
         wait_start = rospy.Time.now()
+        wait_timed_out = False
         while not rospy.is_shutdown():
             with self.pointcloud_lock:
-                has_fresh_cloud = (
+                latest_count = len(self.latest_pointcloud) if self.latest_pointcloud is not None else 0
+                has_newer_cloud = (
                     self.latest_pointcloud is not None and
                     self.latest_pointcloud_time >= self.crop_config_time
                 )
 
+                if self.crop_waiting_for_cropped_cloud and self.pre_crop_point_count > 0:
+                    # ROI 裁剪后点数应明显小于裁剪前点数。若仍接近裁剪前规模，
+                    # 说明当前缓存很可能还是未裁剪点云，不能用于拟合。
+                    has_fresh_cloud = (
+                        has_newer_cloud and
+                        latest_count < int(self.pre_crop_point_count * 0.8)
+                    )
+                else:
+                    has_fresh_cloud = has_newer_cloud
+
             if has_fresh_cloud:
+                if self.crop_waiting_for_cropped_cloud:
+                    rospy.loginfo(
+                        f"确认收到裁剪后点云: {self.pre_crop_point_count} -> {latest_count} 个点"
+                    )
+                    self.crop_waiting_for_cropped_cloud = False
                 break
 
             if rospy.Time.now() - wait_start > self.crop_wait_timeout:
-                rospy.logwarn(
-                    "等待裁剪后点云超时，将使用当前缓存点云；请确认 /cloud_in 是否仍在发布"
-                )
+                wait_timed_out = True
                 break
 
             rospy.sleep(0.05)
+
+        if wait_timed_out and self.crop_waiting_for_cropped_cloud:
+            rospy.logwarn(
+                "等待裁剪后点云超时，取消本次曲面拟合，避免使用未裁剪点云；"
+                "请确认 pointcloud_processor 已输出裁剪后 /cloud_in 后再重试"
+            )
+            return
 
         # 检查是否有缓存的点云
         with self.pointcloud_lock:
@@ -418,7 +456,8 @@ class GrpcPlannerBridge:
             request = planner_pb2.UpdatePointCloudRequest(
                 points=flat_points,
                 num_points=len(filtered_points),
-                reverse_normal=self.reverse_normal
+                reverse_normal=self.reverse_normal,
+                reference_normal_axis=self.reference_normal_axis
             )
 
             response = self.grpc_stub.UpdatePointCloud(request)
@@ -459,8 +498,22 @@ class GrpcPlannerBridge:
     def reverse_normal_callback(self, msg):
         """曲面拟合参考法向反转回调函数"""
         self.reverse_normal = bool(msg.data)
-        direction = "+Z" if self.reverse_normal else "-Z"
-        rospy.loginfo(f"曲面拟合参考法向设置为 {direction}")
+        rospy.loginfo(f"曲面拟合参考法向设置为 {self.get_reference_normal_label()}")
+
+    def reference_normal_axis_callback(self, msg):
+        """曲面拟合参考法向轴向回调函数"""
+        axis = int(msg.data)
+        if axis not in (0, 1, 2):
+            rospy.logwarn(f"收到非法参考法向轴向: {axis}，保持当前设置")
+            return
+
+        self.reference_normal_axis = axis
+        rospy.loginfo(f"曲面拟合参考法向设置为 {self.get_reference_normal_label()}")
+
+    def get_reference_normal_label(self):
+        axis_names = ["X", "Y", "Z"]
+        sign = "+" if self.reverse_normal else "-"
+        return f"{sign}{axis_names[self.reference_normal_axis]}"
 
     def publish_mesh(self, triangles):
         """发布网格数据为 MarkerArray"""

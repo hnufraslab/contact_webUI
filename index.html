@@ -147,8 +147,16 @@
                         </div>
                         <div class="param-row">
                             <span>参考法向:</span>
-                            <span id="surface-normal-text">-Z</span>
+                            <span id="surface-normal-text">-X</span>
                         </div>
+                    </div>
+                    <div class="input-group">
+                        <label>参考轴向:</label>
+                        <select id="normal-axis">
+                            <option value="0" selected>X</option>
+                            <option value="1">Y</option>
+                            <option value="2">Z</option>
+                        </select>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="reverse-normal" />
@@ -255,6 +263,6 @@
     <!-- 加载主脚本 -->
     <script src="js/pointcloud.js?v=5"></script>
     <script src="js/roi_selector.js?v=5"></script>
-    <script src="js/main.js?v=11"></script>
+    <script src="js/main.js?v=12"></script>
 </body>
 </html>
